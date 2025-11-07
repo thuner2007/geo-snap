@@ -2,7 +2,8 @@ import { ThemedView } from "@/components/themed-view";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { PhotoMapView } from "@/components/map/photo-map-view";
 import { useRouter } from "expo-router";
-import { StyleSheet, TouchableOpacity } from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { ThemedText } from "@/components/themed-text";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -12,10 +13,16 @@ export default function HomeScreen() {
       <PhotoMapView
         photos={[]}
         onMarkerPress={(photo) => {
-          // TODO: Show photo detail modal
           console.log("Photo pressed:", photo.id);
         }}
       />
+
+      <View style={styles.infoBox}>
+        <ThemedText style={styles.infoText}>
+          📍 Gehe zu "Meine Fotos" um deine Galerie zu laden
+        </ThemedText>
+      </View>
+
       <TouchableOpacity
         style={styles.fab}
         onPress={() => router.push("/camera")}
@@ -30,6 +37,20 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  infoBox: {
+    position: "absolute",
+    top: 60,
+    left: 20,
+    right: 20,
+    backgroundColor: "rgba(0, 128, 255, 0.9)",
+    padding: 12,
+    borderRadius: 8,
+  },
+  infoText: {
+    color: "#ffffff",
+    fontSize: 14,
+    textAlign: "center",
   },
   fab: {
     position: "absolute",

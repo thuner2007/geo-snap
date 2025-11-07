@@ -2,13 +2,7 @@ import React from "react";
 import { StyleSheet, View, Text } from "react-native";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 
-interface Photo {
-  id: string;
-  uri: string;
-  latitude: number;
-  longitude: number;
-  timestamp: number;
-}
+import { Photo } from "@/types/photo";
 
 interface PhotoMapViewProps {
   photos?: Photo[];

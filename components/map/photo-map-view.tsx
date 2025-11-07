@@ -3,14 +3,7 @@ import { StyleSheet, View, Platform } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Location from "expo-location";
 import { PhotoMarker } from "./photo-marker";
-
-interface Photo {
-  id: string;
-  uri: string;
-  latitude: number;
-  longitude: number;
-  timestamp: number;
-}
+import { Photo } from "@/types/photo";
 
 interface PhotoMapViewProps {
   photos?: Photo[];

@@ -12,8 +12,11 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen."
-      }
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen.",
+        "NSPhotoLibraryUsageDescription": "Geo-Snap benötigt Zugriff auf deine Galerie, um Fotos mit Standortinformationen anzuzeigen.",
+        "NSPhotoLibraryAddUsageDescription": "Geo-Snap benötigt Zugriff, um Fotos in deiner Galerie zu speichern."
+      },
+      "bundleIdentifier": "com.anonymous.geosnap"
     },
     "android": {
       "adaptiveIcon": {
@@ -26,13 +29,24 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "READ_MEDIA_IMAGES",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES"
       ],
       "config": {
         "googleMaps": {
           "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
         }
-      }
+      },
+      "package": "com.anonymous.geosnap"
     },
     "web": {
       "output": "static",
@@ -44,6 +58,15 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Geo-Snap benötigt Zugriff auf deine Galerie, um Fotos mit Standortinformationen anzuzeigen.",
+          "savePhotosPermission": "Geo-Snap benötigt Zugriff, um Fotos in deiner Galerie zu speichern.",
+          "isAccessMediaLocationEnabled": true,
+          "androidPermissions": ["READ_MEDIA_IMAGES", "ACCESS_MEDIA_LOCATION"]
         }
       ],
       [
