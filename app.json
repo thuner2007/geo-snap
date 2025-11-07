@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +23,16 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+        }
+      }
     },
     "web": {
       "output": "static",
@@ -27,6 +40,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen."
+        }
+      ],
       [
         "expo-splash-screen",
         {

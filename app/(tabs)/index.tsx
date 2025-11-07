@@ -1,5 +1,6 @@
 import { ThemedView } from "@/components/themed-view";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { PhotoMapView } from "@/components/map/photo-map-view";
 import { useRouter } from "expo-router";
 import { StyleSheet, TouchableOpacity } from "react-native";
 
@@ -8,7 +9,13 @@ export default function HomeScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      {/* Empty page - Geo-Snap / Karte */}
+      <PhotoMapView
+        photos={[]}
+        onMarkerPress={(photo) => {
+          // TODO: Show photo detail modal
+          console.log("Photo pressed:", photo.id);
+        }}
+      />
       <TouchableOpacity
         style={styles.fab}
         onPress={() => router.push("/camera")}
