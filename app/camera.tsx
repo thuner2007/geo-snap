@@ -1,21 +1,224 @@
 import { ThemedView } from "@/components/themed-view";
+import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
+import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
-import { StyleSheet, Text, TouchableOpacity } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  useAnimatedProps,
+  useSharedValue,
+} from "react-native-reanimated";
+
+const AnimatedCameraView = Animated.createAnimatedComponent(CameraView);
 
 export default function CameraScreen() {
   const router = useRouter();
+  const [facing, setFacing] = useState<CameraType>("back");
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [mediaPermission, requestMediaPermission] =
+    MediaLibrary.usePermissions();
+  const cameraRef = useRef<CameraView>(null);
+  const [isTakingPhoto, setIsTakingPhoto] = useState(false);
+  const zoom = useSharedValue(0);
+  const baseZoom = useSharedValue(0);
+
+  // Automatically request permissions when component mounts
+  useEffect(() => {
+    const requestPermissions = async () => {
+      if (!cameraPermission?.granted) {
+        await requestCameraPermission();
+      }
+      if (!mediaPermission?.granted) {
+        await requestMediaPermission();
+      }
+    };
+
+    requestPermissions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Pinch gesture handler for zoom with proper clamping
+  const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      baseZoom.value = zoom.value;
+    })
+    .onUpdate((event) => {
+      // Calculate new zoom based on pinch scale
+      // scale of 1 = no zoom, scale > 1 = zoom in, scale < 1 = zoom out
+      const scale = event.scale;
+      const newZoom = baseZoom.value + (scale - 1) * 0.5; // 0.5 factor for smoother zoom
+
+      // Clamp zoom between 0 (no zoom) and 0.5 (50% zoom) to prevent extreme zoom
+      zoom.value = Math.max(0, Math.min(newZoom, 0.5));
+    })
+    .onEnd(() => {
+      baseZoom.value = zoom.value;
+    });
+
+  const animatedProps = useAnimatedProps(() => ({
+    zoom: zoom.value,
+  }));
+
+  const openGallery = async () => {
+    try {
+      // Request media library permissions if not granted
+      if (!mediaPermission?.granted) {
+        const { status } = await requestMediaPermission();
+        if (status !== "granted") {
+          Alert.alert(
+            "Permission Required",
+            "Media library permission is required to access the gallery."
+          );
+          return;
+        }
+      }
+
+      // Open image picker to view gallery
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        // You can handle the selected image here if needed
+        console.log("Selected image:", result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error("Error opening gallery:", error);
+      Alert.alert("Error", "Failed to open gallery.");
+    }
+  };
+
+  const toggleCameraFacing = () => {
+    setFacing((current) => (current === "back" ? "front" : "back"));
+  };
+
+  const takePicture = async () => {
+    if (!cameraRef.current || isTakingPhoto) return;
+
+    try {
+      setIsTakingPhoto(true);
+
+      // Check permissions before taking photo
+      if (!cameraPermission?.granted) {
+        Alert.alert(
+          "Permission Required",
+          "Camera permission is required to take photos."
+        );
+        return;
+      }
+
+      if (!mediaPermission?.granted) {
+        const { status } = await requestMediaPermission();
+        if (status !== "granted") {
+          Alert.alert(
+            "Permission Required",
+            "Media library permission is required to save photos."
+          );
+          return;
+        }
+      }
+
+      // Take the photo
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 1,
+        exif: true,
+      });
+
+      if (photo) {
+        // Save to gallery
+        await MediaLibrary.createAssetAsync(photo.uri);
+        Alert.alert("Success", "Photo saved to gallery!", [
+          { text: "OK", onPress: () => {} },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error taking picture:", error);
+      Alert.alert("Error", "Failed to take or save photo. Please try again.");
+    } finally {
+      setIsTakingPhoto(false);
+    }
+  };
+
+  // Check if permissions are not determined yet
+  if (!cameraPermission || !mediaPermission) {
+    return (
+      <ThemedView style={styles.container}>
+        <Text style={styles.text}>Loading...</Text>
+      </ThemedView>
+    );
+  }
+
+  // Show loading while waiting for permissions
+  if (!cameraPermission.granted || !mediaPermission.granted) {
+    return (
+      <ThemedView style={styles.container}>
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={() => router.back()}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.closeIcon}>✕</Text>
+        </TouchableOpacity>
+        <Text style={styles.permissionText}>Requesting permissions...</Text>
+      </ThemedView>
+    );
+  }
 
   return (
-    <ThemedView style={styles.container}>
-      <TouchableOpacity
-        style={styles.closeButton}
-        onPress={() => router.back()}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.closeIcon}>✕</Text>
-      </TouchableOpacity>
-      <Text style={styles.text}>Camera Page</Text>
-    </ThemedView>
+    <View style={styles.container}>
+      <GestureDetector gesture={pinchGesture}>
+        <AnimatedCameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing={facing}
+          animatedProps={animatedProps}
+        >
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.closeIcon}>✕</Text>
+            </TouchableOpacity>
+
+            <View style={styles.bottomControls}>
+              <TouchableOpacity
+                style={styles.flipButton}
+                onPress={toggleCameraFacing}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.flipIcon}>🔄</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.captureButton,
+                  isTakingPhoto && styles.captureButtonDisabled,
+                ]}
+                onPress={takePicture}
+                activeOpacity={0.8}
+                disabled={isTakingPhoto}
+              >
+                <View style={styles.captureButtonInner} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.galleryButton}
+                onPress={openGallery}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.galleryIcon}>🖼️</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </AnimatedCameraView>
+      </GestureDetector>
+    </View>
   );
 }
 
@@ -23,10 +226,35 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
-    alignItems: "center",
+  },
+  camera: {
+    flex: 1,
+  },
+  buttonContainer: {
+    flex: 1,
+    backgroundColor: "transparent",
   },
   text: {
     fontSize: 24,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  permissionText: {
+    fontSize: 16,
+    fontWeight: "500",
+    textAlign: "center",
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  permissionButton: {
+    backgroundColor: "#007AFF",
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 10,
+  },
+  permissionButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
     fontWeight: "600",
   },
   closeButton: {
@@ -36,7 +264,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#666666",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "center",
     alignItems: "center",
     zIndex: 10,
@@ -45,5 +273,56 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 24,
     fontWeight: "300",
+  },
+  bottomControls: {
+    position: "absolute",
+    bottom: 40,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  flipButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  flipIcon: {
+    fontSize: 28,
+  },
+  galleryButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  galleryIcon: {
+    fontSize: 28,
+  },
+  captureButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 4,
+    borderColor: "#ffffff",
+  },
+  captureButtonDisabled: {
+    opacity: 0.5,
+  },
+  captureButtonInner: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: "#ffffff",
   },
 });
