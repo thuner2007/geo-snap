@@ -1,4 +1,6 @@
 import { ThemedView } from "@/components/themed-view";
+import Feather from "@expo/vector-icons/Feather";
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
@@ -7,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  runOnJS,
   useAnimatedProps,
   useSharedValue,
 } from "react-native-reanimated";
@@ -21,6 +24,7 @@ export default function CameraScreen() {
     MediaLibrary.usePermissions();
   const cameraRef = useRef<CameraView>(null);
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(0);
   const zoom = useSharedValue(0);
   const baseZoom = useSharedValue(0);
 
@@ -51,7 +55,11 @@ export default function CameraScreen() {
       const newZoom = baseZoom.value + (scale - 1) * 0.5; // 0.5 factor for smoother zoom
 
       // Clamp zoom between 0 (no zoom) and 0.5 (50% zoom) to prevent extreme zoom
-      zoom.value = Math.max(0, Math.min(newZoom, 0.5));
+      const clampedZoom = Math.max(0, Math.min(newZoom, 0.5));
+      zoom.value = clampedZoom;
+
+      // Update zoom level state for display (run on JS thread)
+      runOnJS(setZoomLevel)(clampedZoom);
     })
     .onEnd(() => {
       baseZoom.value = zoom.value;
@@ -186,13 +194,22 @@ export default function CameraScreen() {
               <Text style={styles.closeIcon}>✕</Text>
             </TouchableOpacity>
 
+            {/* Zoom Level Indicator */}
+            {zoomLevel > 0 && (
+              <View style={styles.zoomIndicator}>
+                <Text style={styles.zoomText}>
+                  {(1 + zoomLevel * 2).toFixed(1)}x
+                </Text>
+              </View>
+            )}
+
             <View style={styles.bottomControls}>
               <TouchableOpacity
                 style={styles.flipButton}
                 onPress={toggleCameraFacing}
                 activeOpacity={0.8}
               >
-                <Text style={styles.flipIcon}>🔄</Text>
+                <FontAwesome6 name="arrows-rotate" size={24} color="white" />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -212,7 +229,7 @@ export default function CameraScreen() {
                 onPress={openGallery}
                 activeOpacity={0.8}
               >
-                <Text style={styles.galleryIcon}>🖼️</Text>
+                <Feather name="image" size={24} color="white" />
               </TouchableOpacity>
             </View>
           </View>
@@ -285,26 +302,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   flipButton: {
-    width: 60,
-    height: 60,
+    width: 55,
+    height: 55,
     borderRadius: 30,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "center",
     alignItems: "center",
-  },
-  flipIcon: {
-    fontSize: 28,
+    borderColor: "white",
+    borderWidth: 1,
   },
   galleryButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    width: 55,
+    height: 55,
+    borderRadius: 10,
+    backgroundColor: "#007AFF",
     justifyContent: "center",
     alignItems: "center",
-  },
-  galleryIcon: {
-    fontSize: 28,
+    borderColor: "white",
+    borderWidth: 1,
   },
   captureButton: {
     width: 80,
@@ -324,5 +339,21 @@ const styles = StyleSheet.create({
     height: 68,
     borderRadius: 34,
     backgroundColor: "#ffffff",
+  },
+  zoomIndicator: {
+    position: "absolute",
+    top: 70,
+    alignSelf: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+  },
+  zoomText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
