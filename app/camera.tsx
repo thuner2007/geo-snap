@@ -134,8 +134,8 @@ export default function CameraScreen() {
         }
       }
 
-      // Take the photo
-      const photo = await cameraRef.current.takePictureAsync({
+      // Take the photo - cast to any to access takePictureAsync on AnimatedCameraView
+      const photo = await (cameraRef.current as any).takePictureAsync({
         quality: 1,
         exif: true,
       });
