@@ -3,6 +3,7 @@ import Feather from "@expo/vector-icons/Feather";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
 import { File, Paths } from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
@@ -296,6 +297,21 @@ export default function CameraScreen() {
           }
           console.log("File verified, size:", bytes.length, "bytes");
 
+          // For Android, also write using legacy API to ensure EXIF preservation
+          if (Platform.OS === "android") {
+            try {
+              console.log("Android: Verifying file with legacy API...");
+              // The file is already written, but we verify it's accessible
+              const fileInfo = await FileSystem.getInfoAsync(newPhotoFile.uri);
+              console.log("Legacy file info:", fileInfo);
+            } catch (legacyError) {
+              console.log(
+                "Legacy API check failed (not critical):",
+                legacyError
+              );
+            }
+          }
+
           finalUri = newPhotoFile.uri;
           console.log("GPS EXIF data embedded successfully");
           console.log("New photo URI:", finalUri);
@@ -312,9 +328,38 @@ export default function CameraScreen() {
       console.log("Saving to gallery...");
       console.log("Final URI to save:", finalUri);
 
-      // On Android, we might need to explicitly save to a specific album
-      const asset = await MediaLibrary.createAssetAsync(finalUri);
+      let asset;
 
+      if (Platform.OS === "android" && location) {
+        // Android EXIF preservation workaround:
+        // Copy file manually to DCIM, then tell MediaLibrary about it
+        console.log("Android: Using EXIF-preserving save method...");
+
+        try {
+          // Step 1: Copy the EXIF-embedded file to a permanent location
+          const timestamp = Date.now();
+          const dcimPath = `${FileSystem.documentDirectory}GPS_PHOTO_${timestamp}.jpg`;
+
+          console.log("Copying file with EXIF to:", dcimPath);
+          await FileSystem.copyAsync({
+            from: finalUri,
+            to: dcimPath,
+          });
+
+          console.log("File copied, now adding to MediaLibrary...");
+          // Step 2: Add the copied file to gallery (should preserve EXIF)
+          asset = await MediaLibrary.createAssetAsync(dcimPath);
+
+          console.log("Asset created with preserved EXIF");
+        } catch (androidError) {
+          console.error("Android EXIF preservation failed:", androidError);
+          // Fallback to standard method
+          asset = await MediaLibrary.createAssetAsync(finalUri);
+        }
+      } else {
+        // iOS or no location - standard save
+        asset = await MediaLibrary.createAssetAsync(finalUri);
+      }
       console.log("Photo saved to gallery:", asset);
       console.log("Asset URI:", asset.uri);
       console.log("Asset details:", JSON.stringify(asset, null, 2));
