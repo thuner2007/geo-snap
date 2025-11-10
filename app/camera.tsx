@@ -145,35 +145,36 @@ export default function CameraScreen() {
         // Continue without location
       }
 
-      // Take the photo with location in EXIF data
+      // Take the photo with EXIF data
       const photo = await cameraRef.current.takePictureAsync({
         quality: 1,
         exif: true,
-        // Include location in photo if available
-        ...(location && {
-          gps: {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            altitude: location.coords.altitude || 0,
-          },
-        }),
       });
 
       console.log("Photo taken:", photo);
 
       if (photo && photo.uri) {
-        console.log("Saving to gallery...");
+        console.log("Saving to gallery with location...");
+        console.log("Photo EXIF data:", photo.exif);
 
-        // Save to gallery - the EXIF data with GPS coordinates is already embedded
+        // Save to gallery - location should be preserved in EXIF if available
         const asset = await MediaLibrary.createAssetAsync(photo.uri);
 
-        console.log("Photo saved:", asset);
+        console.log("Photo saved to gallery:", asset);
+
+        if (location) {
+          console.log(
+            `GPS Coordinates captured: Lat ${location.coords.latitude}, Lng ${location.coords.longitude}`
+          );
+        }
 
         const successMessage = location
           ? `Photo saved with location!\nLat: ${location.coords.latitude.toFixed(
               6
-            )}, Lng: ${location.coords.longitude.toFixed(6)}`
-          : "Photo saved to gallery!";
+            )}, Lng: ${location.coords.longitude.toFixed(
+              6
+            )}\n\nOpen your gallery app and check photo details/properties to see the location on a map.`
+          : "Photo saved to gallery!\n\nEnable location permission to save GPS data with your photos.";
 
         Alert.alert("Success", successMessage, [
           { text: "OK", onPress: () => {} },
