@@ -8,7 +8,14 @@ import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import {
   Gesture,
   GestureDetector,
@@ -164,9 +171,14 @@ export default function CameraScreen() {
       if (location) {
         try {
           console.log("Embedding GPS EXIF data...");
+          console.log(`Platform: ${Platform.OS}`);
 
           const { latitude, longitude } = location.coords;
           const altitude = location.coords.altitude || 0;
+
+          console.log(
+            `GPS Data - Lat: ${latitude}, Lng: ${longitude}, Alt: ${altitude}`
+          );
 
           // Convert decimal degrees to degrees, minutes, seconds (EXIF GPS format)
           const toDegreesMinutesSeconds = (decimal: number) => {
@@ -262,21 +274,36 @@ export default function CameraScreen() {
             }
           }
 
-          newPhotoFile.write(bytes);
+          // Write the file
+          await newPhotoFile.write(bytes);
+
+          // Verify file was written (especially important on Android)
+          console.log("Verifying file write...");
+          const fileExists = newPhotoFile.exists;
+          if (!fileExists) {
+            throw new Error("Failed to write file with GPS EXIF data");
+          }
+          console.log("File verified, size:", bytes.length, "bytes");
 
           finalUri = newPhotoFile.uri;
           console.log("GPS EXIF data embedded successfully");
+          console.log("New photo URI:", finalUri);
         } catch (exifError) {
           console.error("Error embedding GPS EXIF:", exifError);
+          console.error("EXIF error details:", exifError);
           // Continue with original photo
         }
+      } else {
+        console.log("No location available - saving photo without GPS data");
       }
 
       // Save to gallery
       console.log("Saving to gallery...");
+      console.log("Final URI to save:", finalUri);
       const asset = await MediaLibrary.createAssetAsync(finalUri);
 
       console.log("Photo saved to gallery:", asset);
+      console.log("Asset details:", JSON.stringify(asset, null, 2));
 
       if (location) {
         console.log(
@@ -284,9 +311,11 @@ export default function CameraScreen() {
         );
       }
 
-      // Simple, fast success message
+      // Platform-specific success message
       const successMessage = location
-        ? `Photo saved with location! 📍\n\nSwipe up in Photos app to view on map.`
+        ? Platform.OS === "android"
+          ? `Photo saved with location! 📍\n\nOpen Google Photos to see location on map.`
+          : `Photo saved with location! 📍\n\nSwipe up in Photos app to view on map.`
         : "Photo saved!\n\nEnable location in Settings to tag photos.";
 
       Alert.alert("Success", successMessage);
