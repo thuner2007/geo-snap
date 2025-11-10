@@ -13,7 +13,9 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen.",
-        "NSPhotoLibraryUsageDescription": "Geo-Snap benötigt Zugriff auf deine Galerie, um Fotos mit Standorten anzuzeigen."
+        "NSCameraUsageDescription": "Geo-Snap benötigt Zugriff auf die Kamera, um Fotos aufzunehmen.",
+        "NSPhotoLibraryUsageDescription": "Geo-Snap benötigt Zugriff auf deine Fotobibliothek, um Fotos zu speichern.",
+        "NSPhotoLibraryAddUsageDescription": "Geo-Snap benötigt Zugriff auf deine Fotobibliothek, um Fotos zu speichern."
       }
     },
     "android": {
@@ -28,8 +30,10 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
         "READ_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES"
+        "WRITE_EXTERNAL_STORAGE"
       ],
       "config": {
         "googleMaps": {
@@ -43,6 +47,20 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Geo-Snap benötigt Zugriff auf die Kamera, um Fotos aufzunehmen."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Geo-Snap benötigt Zugriff auf deine Fotobibliothek, um Fotos zu speichern.",
+          "savePhotosPermission": "Geo-Snap benötigt Zugriff auf deine Fotobibliothek, um Fotos zu speichern.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
       [
         "expo-location",
         {
