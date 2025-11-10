@@ -132,24 +132,21 @@ export default function CameraScreen() {
 
       console.log("Taking picture...");
 
-      // Get current location
+      // Get location FIRST (so it's ready when we need it)
       let location = null;
-      try {
-        if (locationPermission?.granted) {
+      if (locationPermission?.granted) {
+        try {
           console.log("Getting location...");
           location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.High,
           });
           console.log("Location obtained:", location.coords);
-        } else {
-          console.log("Location permission not granted");
+        } catch (locationError) {
+          console.error("Error getting location:", locationError);
         }
-      } catch (locationError) {
-        console.error("Error getting location:", locationError);
-        // Continue without location
       }
 
-      // Take the photo with EXIF data
+      // Take the photo
       const photo = await cameraRef.current.takePictureAsync({
         quality: 1,
         exif: true,
@@ -157,121 +154,134 @@ export default function CameraScreen() {
 
       console.log("Photo taken:", photo);
 
-      if (photo && photo.uri) {
-        console.log("Saving to gallery with location...");
-        console.log("Photo EXIF data:", photo.exif);
-
-        let finalUri = photo.uri;
-
-        // If we have location, embed GPS data into the image EXIF
-        if (location) {
-          try {
-            console.log("Adding GPS EXIF data to photo...");
-
-            // Convert coordinates to EXIF GPS format
-            const latitude = location.coords.latitude;
-            const longitude = location.coords.longitude;
-            const altitude = location.coords.altitude || 0;
-
-            // Convert decimal degrees to degrees, minutes, seconds
-            const toExifGPS = (decimal: number, isLatitude: boolean) => {
-              const absolute = Math.abs(decimal);
-              const degrees = Math.floor(absolute);
-              const minutesDecimal = (absolute - degrees) * 60;
-              const minutes = Math.floor(minutesDecimal);
-              const seconds = (minutesDecimal - minutes) * 60;
-
-              const ref = isLatitude
-                ? decimal >= 0
-                  ? "N"
-                  : "S"
-                : decimal >= 0
-                ? "E"
-                : "W";
-
-              return {
-                value: [
-                  [degrees, 1],
-                  [Math.floor(minutes), 1],
-                  [Math.floor(seconds * 100), 100],
-                ],
-                ref: ref,
-              };
-            };
-
-            const latGPS = toExifGPS(latitude, true);
-            const lonGPS = toExifGPS(longitude, false);
-
-            // Read the photo as base64
-            const photoFile = new File(photo.uri);
-            const base64 = await photoFile.text();
-            const base64Data = base64.startsWith("data:")
-              ? base64.split(",")[1]
-              : base64;
-
-            // Convert to JPEG with data URI
-            const imageData = `data:image/jpeg;base64,${base64Data}`;
-
-            // Get existing EXIF or create new one
-            let exifObj = piexif.load(imageData);
-
-            // Add GPS data
-            exifObj.GPS = {
-              [piexif.GPSIFD.GPSLatitude]: latGPS.value,
-              [piexif.GPSIFD.GPSLatitudeRef]: latGPS.ref,
-              [piexif.GPSIFD.GPSLongitude]: lonGPS.value,
-              [piexif.GPSIFD.GPSLongitudeRef]: lonGPS.ref,
-              [piexif.GPSIFD.GPSAltitude]: [Math.floor(altitude * 100), 100],
-              [piexif.GPSIFD.GPSAltitudeRef]: altitude >= 0 ? 0 : 1,
-            };
-
-            // Convert EXIF to binary
-            const exifBytes = piexif.dump(exifObj);
-
-            // Insert EXIF into image
-            const newImageData = piexif.insert(exifBytes, imageData);
-
-            // Save the new image with GPS EXIF data
-            const newBase64 = newImageData.split(",")[1];
-            const newFile = new File(
-              Paths.cache,
-              `photo_with_gps_${Date.now()}.jpg`
-            );
-            await newFile.write(newBase64);
-
-            finalUri = newFile.uri;
-            console.log("GPS EXIF data added successfully");
-          } catch (exifError) {
-            console.error("Error adding GPS EXIF:", exifError);
-            // Continue with original photo if EXIF embedding fails
-          }
-        }
-
-        // Save to gallery - now with GPS EXIF data
-        const asset = await MediaLibrary.createAssetAsync(finalUri);
-
-        console.log("Photo saved to gallery:", asset);
-
-        if (location) {
-          console.log(
-            `GPS Coordinates embedded: Lat ${location.coords.latitude}, Lng ${location.coords.longitude}`
-          );
-        }
-
-        const successMessage = location
-          ? `Photo saved with GPS location!\nLat: ${location.coords.latitude.toFixed(
-              6
-            )}, Lng: ${location.coords.longitude.toFixed(
-              6
-            )}\n\nOpen Photos app → tap photo → swipe up to see location on map.`
-          : "Photo saved to gallery!\n\nEnable location permission to save GPS data with your photos.";
-
-        Alert.alert("Success", successMessage, [
-          { text: "OK", onPress: () => {} },
-        ]);
-      } else {
+      if (!photo || !photo.uri) {
         throw new Error("Photo URI is missing");
       }
+
+      let finalUri = photo.uri;
+
+      // If we have location, embed GPS EXIF data properly
+      if (location) {
+        try {
+          console.log("Embedding GPS EXIF data...");
+
+          const { latitude, longitude } = location.coords;
+          const altitude = location.coords.altitude || 0;
+
+          // Convert decimal degrees to degrees, minutes, seconds (EXIF GPS format)
+          const toDegreesMinutesSeconds = (decimal: number) => {
+            const absolute = Math.abs(decimal);
+            const degrees = Math.floor(absolute);
+            const minutesFloat = (absolute - degrees) * 60;
+            const minutes = Math.floor(minutesFloat);
+            const seconds = (minutesFloat - minutes) * 60;
+
+            return [
+              [degrees, 1],
+              [minutes, 1],
+              [Math.round(seconds * 100), 100],
+            ];
+          };
+
+          // Read the image file
+          const photoFile = new File(photo.uri);
+          const arrayBuffer = await photoFile.arrayBuffer();
+
+          // Convert ArrayBuffer to base64
+          const inputBytes = new Uint8Array(arrayBuffer);
+          let binary = "";
+          for (let i = 0; i < inputBytes.length; i++) {
+            binary += String.fromCharCode(inputBytes[i]);
+          }
+          const base64 = btoa(binary);
+
+          // Create data URI for piexif
+          const imageData = `data:image/jpeg;base64,${base64}`;
+
+          // Load existing EXIF or create new
+          let exifObj;
+          try {
+            exifObj = piexif.load(imageData);
+          } catch {
+            exifObj = { "0th": {}, Exif: {}, GPS: {}, Interop: {}, "1st": {} };
+          }
+
+          // Add GPS data with proper EXIF tags
+          exifObj.GPS[piexif.GPSIFD.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
+          exifObj.GPS[piexif.GPSIFD.GPSLatitude] =
+            toDegreesMinutesSeconds(latitude);
+          exifObj.GPS[piexif.GPSIFD.GPSLongitudeRef] =
+            longitude >= 0 ? "E" : "W";
+          exifObj.GPS[piexif.GPSIFD.GPSLongitude] =
+            toDegreesMinutesSeconds(longitude);
+          exifObj.GPS[piexif.GPSIFD.GPSAltitudeRef] = altitude >= 0 ? 0 : 1;
+          exifObj.GPS[piexif.GPSIFD.GPSAltitude] = [
+            Math.abs(Math.round(altitude * 100)),
+            100,
+          ];
+
+          // Add GPS timestamp
+          const now = new Date();
+          exifObj.GPS[piexif.GPSIFD.GPSDateStamp] = now
+            .toISOString()
+            .split("T")[0]
+            .replace(/-/g, ":");
+          exifObj.GPS[piexif.GPSIFD.GPSTimeStamp] = [
+            [now.getUTCHours(), 1],
+            [now.getUTCMinutes(), 1],
+            [now.getUTCSeconds(), 1],
+          ];
+
+          // Dump EXIF to binary
+          const exifBytes = piexif.dump(exifObj);
+
+          // Insert EXIF into image
+          const newImageData = piexif.insert(exifBytes, imageData);
+
+          // Write the new image with GPS EXIF to file system
+          const newPhotoFile = new File(Paths.cache, `photo_${Date.now()}.jpg`);
+          const newBase64 = newImageData.replace("data:image/jpeg;base64,", "");
+
+          // Convert base64 to Uint8Array for writing
+          const binaryString = atob(newBase64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+
+          newPhotoFile.write(bytes);
+
+          finalUri = newPhotoFile.uri;
+          console.log("GPS EXIF data embedded successfully");
+        } catch (exifError) {
+          console.error("Error embedding GPS EXIF:", exifError);
+          // Continue with original photo
+        }
+      }
+
+      // Save to gallery
+      console.log("Saving to gallery...");
+      const asset = await MediaLibrary.createAssetAsync(finalUri);
+
+      console.log("Photo saved to gallery:", asset);
+
+      if (location) {
+        console.log(
+          `GPS Coordinates: Lat ${location.coords.latitude}, Lng ${location.coords.longitude}`
+        );
+      }
+
+      const successMessage = location
+        ? `Photo saved with GPS location!\n\nLat: ${location.coords.latitude.toFixed(
+            6
+          )}, Lng: ${location.coords.longitude.toFixed(
+            6
+          )}\n\nYou can now view the location in the iOS Photos app. Open the photo and swipe up to see it on the map!`
+        : "Photo saved!\n\nEnable location permission in Settings to save GPS data with your photos.";
+
+      Alert.alert("Success", successMessage, [
+        { text: "OK", onPress: () => {} },
+      ]);
     } catch (error: any) {
       console.error("Error taking picture:", error);
 
