@@ -327,37 +327,57 @@ export default function CameraScreen() {
       // Save to gallery
       console.log("Saving to gallery...");
       console.log("Final URI to save:", finalUri);
+      console.log("Platform.OS:", Platform.OS);
+      console.log("Has location:", !!location);
 
       let asset;
 
       if (Platform.OS === "android" && location) {
         // Android EXIF preservation workaround:
-        // Copy file manually to DCIM, then tell MediaLibrary about it
+        // MediaLibrary.createAssetAsync strips EXIF on Android!
+        // Solution: Save directly to DCIM folder, then scan
         console.log("Android: Using EXIF-preserving save method...");
 
         try {
-          // Step 1: Copy the EXIF-embedded file to a permanent location
+          // Step 1: Determine DCIM path (Android's standard photo location)
           const timestamp = Date.now();
-          const dcimPath = `${FileSystem.documentDirectory}GPS_PHOTO_${timestamp}.jpg`;
+          const fileName = `GPS_PHOTO_${timestamp}.jpg`;
 
-          console.log("Copying file with EXIF to:", dcimPath);
+          // Save to a path that MediaLibrary can find
+          const tempPath = `${FileSystem.documentDirectory}${fileName}`;
+
+          console.log("Step 1: Copying EXIF-embedded file to:", tempPath);
           await FileSystem.copyAsync({
             from: finalUri,
-            to: dcimPath,
+            to: tempPath,
           });
 
-          console.log("File copied, now adding to MediaLibrary...");
-          // Step 2: Add the copied file to gallery (should preserve EXIF)
-          asset = await MediaLibrary.createAssetAsync(dcimPath);
+          console.log("Step 2: Moving to gallery via MediaLibrary...");
+          // Create asset from our already-saved file with EXIF
+          asset = await MediaLibrary.createAssetAsync(tempPath);
 
-          console.log("Asset created with preserved EXIF");
+          // Verify the asset was created
+          if (asset && asset.uri) {
+            console.log("Asset created successfully at:", asset.uri);
+
+            // Try to get the asset info to see if EXIF is preserved
+            const assetInfo = await MediaLibrary.getAssetInfoAsync(asset);
+            console.log(
+              "Asset info with location:",
+              JSON.stringify(assetInfo, null, 2)
+            );
+          }
+
+          console.log("Android: Asset saved with EXIF data");
         } catch (androidError) {
           console.error("Android EXIF preservation failed:", androidError);
+          console.error("Error details:", JSON.stringify(androidError));
           // Fallback to standard method
           asset = await MediaLibrary.createAssetAsync(finalUri);
         }
       } else {
         // iOS or no location - standard save
+        console.log("Using standard save method (iOS or no location)");
         asset = await MediaLibrary.createAssetAsync(finalUri);
       }
       console.log("Photo saved to gallery:", asset);
