@@ -134,22 +134,42 @@ export default function CameraScreen() {
         }
       }
 
+      console.log("Taking picture...");
+
       // Take the photo - cast to any to access takePictureAsync on AnimatedCameraView
       const photo = await (cameraRef.current as any).takePictureAsync({
         quality: 1,
         exif: true,
       });
 
-      if (photo) {
+      console.log("Photo taken:", photo);
+
+      if (photo && photo.uri) {
+        console.log("Saving to gallery...");
         // Save to gallery
-        await MediaLibrary.createAssetAsync(photo.uri);
+        const asset = await MediaLibrary.createAssetAsync(photo.uri);
+        console.log("Photo saved:", asset);
+
         Alert.alert("Success", "Photo saved to gallery!", [
           { text: "OK", onPress: () => {} },
         ]);
+      } else {
+        throw new Error("Photo URI is missing");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error taking picture:", error);
-      Alert.alert("Error", "Failed to take or save photo. Please try again.");
+
+      let errorMessage = "Failed to take or save photo. Please try again.";
+
+      if (error.message) {
+        errorMessage += `\n\nError: ${error.message}`;
+      }
+
+      if (error.code) {
+        errorMessage += `\nCode: ${error.code}`;
+      }
+
+      Alert.alert("Camera Error", errorMessage);
     } finally {
       setIsTakingPhoto(false);
     }
