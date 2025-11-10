@@ -2,6 +2,7 @@ import { ThemedView } from "@/components/themed-view";
 import Feather from "@expo/vector-icons/Feather";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
+import { File, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
@@ -13,6 +14,9 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const piexif = require("piexifjs");
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -157,23 +161,109 @@ export default function CameraScreen() {
         console.log("Saving to gallery with location...");
         console.log("Photo EXIF data:", photo.exif);
 
-        // Save to gallery - location should be preserved in EXIF if available
-        const asset = await MediaLibrary.createAssetAsync(photo.uri);
+        let finalUri = photo.uri;
+
+        // If we have location, embed GPS data into the image EXIF
+        if (location) {
+          try {
+            console.log("Adding GPS EXIF data to photo...");
+
+            // Convert coordinates to EXIF GPS format
+            const latitude = location.coords.latitude;
+            const longitude = location.coords.longitude;
+            const altitude = location.coords.altitude || 0;
+
+            // Convert decimal degrees to degrees, minutes, seconds
+            const toExifGPS = (decimal: number, isLatitude: boolean) => {
+              const absolute = Math.abs(decimal);
+              const degrees = Math.floor(absolute);
+              const minutesDecimal = (absolute - degrees) * 60;
+              const minutes = Math.floor(minutesDecimal);
+              const seconds = (minutesDecimal - minutes) * 60;
+
+              const ref = isLatitude
+                ? decimal >= 0
+                  ? "N"
+                  : "S"
+                : decimal >= 0
+                ? "E"
+                : "W";
+
+              return {
+                value: [
+                  [degrees, 1],
+                  [Math.floor(minutes), 1],
+                  [Math.floor(seconds * 100), 100],
+                ],
+                ref: ref,
+              };
+            };
+
+            const latGPS = toExifGPS(latitude, true);
+            const lonGPS = toExifGPS(longitude, false);
+
+            // Read the photo as base64
+            const photoFile = new File(photo.uri);
+            const base64 = await photoFile.text();
+            const base64Data = base64.startsWith("data:")
+              ? base64.split(",")[1]
+              : base64;
+
+            // Convert to JPEG with data URI
+            const imageData = `data:image/jpeg;base64,${base64Data}`;
+
+            // Get existing EXIF or create new one
+            let exifObj = piexif.load(imageData);
+
+            // Add GPS data
+            exifObj.GPS = {
+              [piexif.GPSIFD.GPSLatitude]: latGPS.value,
+              [piexif.GPSIFD.GPSLatitudeRef]: latGPS.ref,
+              [piexif.GPSIFD.GPSLongitude]: lonGPS.value,
+              [piexif.GPSIFD.GPSLongitudeRef]: lonGPS.ref,
+              [piexif.GPSIFD.GPSAltitude]: [Math.floor(altitude * 100), 100],
+              [piexif.GPSIFD.GPSAltitudeRef]: altitude >= 0 ? 0 : 1,
+            };
+
+            // Convert EXIF to binary
+            const exifBytes = piexif.dump(exifObj);
+
+            // Insert EXIF into image
+            const newImageData = piexif.insert(exifBytes, imageData);
+
+            // Save the new image with GPS EXIF data
+            const newBase64 = newImageData.split(",")[1];
+            const newFile = new File(
+              Paths.cache,
+              `photo_with_gps_${Date.now()}.jpg`
+            );
+            await newFile.write(newBase64);
+
+            finalUri = newFile.uri;
+            console.log("GPS EXIF data added successfully");
+          } catch (exifError) {
+            console.error("Error adding GPS EXIF:", exifError);
+            // Continue with original photo if EXIF embedding fails
+          }
+        }
+
+        // Save to gallery - now with GPS EXIF data
+        const asset = await MediaLibrary.createAssetAsync(finalUri);
 
         console.log("Photo saved to gallery:", asset);
 
         if (location) {
           console.log(
-            `GPS Coordinates captured: Lat ${location.coords.latitude}, Lng ${location.coords.longitude}`
+            `GPS Coordinates embedded: Lat ${location.coords.latitude}, Lng ${location.coords.longitude}`
           );
         }
 
         const successMessage = location
-          ? `Photo saved with location!\nLat: ${location.coords.latitude.toFixed(
+          ? `Photo saved with GPS location!\nLat: ${location.coords.latitude.toFixed(
               6
             )}, Lng: ${location.coords.longitude.toFixed(
               6
-            )}\n\nOpen your gallery app and check photo details/properties to see the location on a map.`
+            )}\n\nOpen Photos app → tap photo → swipe up to see location on map.`
           : "Photo saved to gallery!\n\nEnable location permission to save GPS data with your photos.";
 
         Alert.alert("Success", successMessage, [
