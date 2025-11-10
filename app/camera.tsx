@@ -12,13 +12,6 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import Animated, {
-  runOnJS,
-  useAnimatedProps,
-  useSharedValue,
-} from "react-native-reanimated";
-
-const AnimatedCameraView = Animated.createAnimatedComponent(CameraView);
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -29,8 +22,8 @@ export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(0);
-  const zoom = useSharedValue(0);
-  const baseZoom = useSharedValue(0);
+  const [currentZoom, setCurrentZoom] = useState(0);
+  const baseZoom = useRef(0);
 
   // Automatically request permissions when component mounts
   useEffect(() => {
@@ -50,28 +43,21 @@ export default function CameraScreen() {
   // Pinch gesture handler for zoom with proper clamping
   const pinchGesture = Gesture.Pinch()
     .onStart(() => {
-      baseZoom.value = zoom.value;
+      baseZoom.current = currentZoom;
     })
     .onUpdate((event) => {
       // Calculate new zoom based on pinch scale
-      // scale of 1 = no zoom, scale > 1 = zoom in, scale < 1 = zoom out
       const scale = event.scale;
-      const newZoom = baseZoom.value + (scale - 1) * 0.5; // 0.5 factor for smoother zoom
+      const newZoom = baseZoom.current + (scale - 1) * 0.5;
 
-      // Clamp zoom between 0 (no zoom) and 0.5 (50% zoom) to prevent extreme zoom
+      // Clamp zoom between 0 (no zoom) and 0.5 (50% zoom)
       const clampedZoom = Math.max(0, Math.min(newZoom, 0.5));
-      zoom.value = clampedZoom;
-
-      // Update zoom level state for display (run on JS thread)
-      runOnJS(setZoomLevel)(clampedZoom);
+      setCurrentZoom(clampedZoom);
+      setZoomLevel(clampedZoom);
     })
     .onEnd(() => {
-      baseZoom.value = zoom.value;
+      baseZoom.current = currentZoom;
     });
-
-  const animatedProps = useAnimatedProps(() => ({
-    zoom: zoom.value,
-  }));
 
   const openGallery = async () => {
     try {
@@ -136,8 +122,8 @@ export default function CameraScreen() {
 
       console.log("Taking picture...");
 
-      // Take the photo - cast to any to access takePictureAsync on AnimatedCameraView
-      const photo = await (cameraRef.current as any).takePictureAsync({
+      // Take the photo
+      const photo = await cameraRef.current.takePictureAsync({
         quality: 1,
         exif: true,
       });
@@ -203,66 +189,67 @@ export default function CameraScreen() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <GestureDetector gesture={pinchGesture}>
-        <AnimatedCameraView
-          ref={cameraRef}
-          style={styles.camera}
-          facing={facing}
-          animatedProps={animatedProps}
-        >
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => router.back()}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.closeIcon}>✕</Text>
-            </TouchableOpacity>
+        <View style={styles.camera}>
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFill}
+            facing={facing}
+            zoom={currentZoom}
+          >
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => router.back()}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.closeIcon}>✕</Text>
+              </TouchableOpacity>
 
-            {/* Zoom Level Indicator */}
-            {zoomLevel > 0 && (
-              <View style={styles.zoomIndicator}>
-                <Text style={styles.zoomText}>
-                  {(1 + zoomLevel * 2).toFixed(1)}x
-                </Text>
+              {/* Zoom Level Indicator */}
+              {zoomLevel > 0 && (
+                <View style={styles.zoomIndicator}>
+                  <Text style={styles.zoomText}>
+                    {(1 + zoomLevel * 2).toFixed(1)}x
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.bottomControls}>
+                <TouchableOpacity
+                  style={styles.flipButton}
+                  onPress={toggleCameraFacing}
+                  activeOpacity={0.8}
+                >
+                  <FontAwesome6 name="arrows-rotate" size={24} color="white" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.captureButton,
+                    isTakingPhoto && styles.captureButtonDisabled,
+                  ]}
+                  onPress={takePicture}
+                  activeOpacity={0.8}
+                  disabled={isTakingPhoto}
+                >
+                  <View style={styles.captureButtonInner} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.galleryButton}
+                  onPress={openGallery}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="image" size={24} color="white" />
+                </TouchableOpacity>
               </View>
-            )}
-
-            <View style={styles.bottomControls}>
-              <TouchableOpacity
-                style={styles.flipButton}
-                onPress={toggleCameraFacing}
-                activeOpacity={0.8}
-              >
-                <FontAwesome6 name="arrows-rotate" size={24} color="white" />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.captureButton,
-                  isTakingPhoto && styles.captureButtonDisabled,
-                ]}
-                onPress={takePicture}
-                activeOpacity={0.8}
-                disabled={isTakingPhoto}
-              >
-                <View style={styles.captureButtonInner} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.galleryButton}
-                onPress={openGallery}
-                activeOpacity={0.8}
-              >
-                <Feather name="image" size={24} color="white" />
-              </TouchableOpacity>
             </View>
-          </View>
-        </AnimatedCameraView>
+          </CameraView>
+        </View>
       </GestureDetector>
     </GestureHandlerRootView>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
