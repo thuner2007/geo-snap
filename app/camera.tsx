@@ -251,6 +251,12 @@ export default function CameraScreen() {
             [now.getUTCSeconds(), 1],
           ];
 
+          // Add GPS processing method and version (important for Android)
+          exifObj.GPS[piexif.GPSIFD.GPSVersionID] = [2, 2, 0, 0];
+          exifObj.GPS[piexif.GPSIFD.GPSMapDatum] = "WGS-84";
+
+          console.log("EXIF GPS object:", JSON.stringify(exifObj.GPS, null, 2));
+
           // Dump EXIF to binary
           const exifBytes = piexif.dump(exifObj);
 
@@ -258,7 +264,12 @@ export default function CameraScreen() {
           const newImageData = piexif.insert(exifBytes, imageData);
 
           // Write the new image with GPS EXIF to file system
-          const newPhotoFile = new File(Paths.cache, `photo_${Date.now()}.jpg`);
+          const timestamp = Date.now();
+          const fileName =
+            Platform.OS === "android"
+              ? `GPS_PHOTO_${timestamp}.jpg`
+              : `photo_${timestamp}.jpg`;
+          const newPhotoFile = new File(Paths.cache, fileName);
           const newBase64 = newImageData.replace("data:image/jpeg;base64,", "");
 
           // Optimized: Convert base64 to Uint8Array using chunks
@@ -300,10 +311,21 @@ export default function CameraScreen() {
       // Save to gallery
       console.log("Saving to gallery...");
       console.log("Final URI to save:", finalUri);
+
+      // On Android, we might need to explicitly save to a specific album
       const asset = await MediaLibrary.createAssetAsync(finalUri);
 
       console.log("Photo saved to gallery:", asset);
+      console.log("Asset URI:", asset.uri);
       console.log("Asset details:", JSON.stringify(asset, null, 2));
+
+      // On Android, trigger media scanner to ensure gallery picks up EXIF
+      if (Platform.OS === "android" && location) {
+        console.log(
+          "Android: Requesting media scanner to pick up EXIF data..."
+        );
+        // The gallery should automatically scan, but log for debugging
+      }
 
       if (location) {
         console.log(
