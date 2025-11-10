@@ -3,6 +3,7 @@ import Feather from "@expo/vector-icons/Feather";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -19,6 +20,8 @@ export default function CameraScreen() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [mediaPermission, requestMediaPermission] =
     MediaLibrary.usePermissions();
+  const [locationPermission, requestLocationPermission] =
+    Location.useForegroundPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(0);
@@ -33,6 +36,9 @@ export default function CameraScreen() {
       }
       if (!mediaPermission?.granted) {
         await requestMediaPermission();
+      }
+      if (!locationPermission?.granted) {
+        await requestLocationPermission();
       }
     };
 
@@ -122,21 +128,54 @@ export default function CameraScreen() {
 
       console.log("Taking picture...");
 
-      // Take the photo
+      // Get current location
+      let location = null;
+      try {
+        if (locationPermission?.granted) {
+          console.log("Getting location...");
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+          });
+          console.log("Location obtained:", location.coords);
+        } else {
+          console.log("Location permission not granted");
+        }
+      } catch (locationError) {
+        console.error("Error getting location:", locationError);
+        // Continue without location
+      }
+
+      // Take the photo with location in EXIF data
       const photo = await cameraRef.current.takePictureAsync({
         quality: 1,
         exif: true,
+        // Include location in photo if available
+        ...(location && {
+          gps: {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            altitude: location.coords.altitude || 0,
+          },
+        }),
       });
 
       console.log("Photo taken:", photo);
 
       if (photo && photo.uri) {
         console.log("Saving to gallery...");
-        // Save to gallery
+
+        // Save to gallery - the EXIF data with GPS coordinates is already embedded
         const asset = await MediaLibrary.createAssetAsync(photo.uri);
+
         console.log("Photo saved:", asset);
 
-        Alert.alert("Success", "Photo saved to gallery!", [
+        const successMessage = location
+          ? `Photo saved with location!\nLat: ${location.coords.latitude.toFixed(
+              6
+            )}, Lng: ${location.coords.longitude.toFixed(6)}`
+          : "Photo saved to gallery!";
+
+        Alert.alert("Success", successMessage, [
           { text: "OK", onPress: () => {} },
         ]);
       } else {
