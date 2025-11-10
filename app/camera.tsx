@@ -7,7 +7,11 @@ import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
   useAnimatedProps,
@@ -177,7 +181,7 @@ export default function CameraScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <GestureHandlerRootView style={styles.container}>
       <GestureDetector gesture={pinchGesture}>
         <AnimatedCameraView
           ref={cameraRef}
@@ -235,7 +239,7 @@ export default function CameraScreen() {
           </View>
         </AnimatedCameraView>
       </GestureDetector>
-    </View>
+    </GestureHandlerRootView>
   );
 }
 
