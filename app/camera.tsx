@@ -132,31 +132,31 @@ export default function CameraScreen() {
 
       console.log("Taking picture...");
 
-      // Get location FIRST (so it's ready when we need it)
-      let location = null;
-      if (locationPermission?.granted) {
-        try {
-          console.log("Getting location...");
-          location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
-          });
-          console.log("Location obtained:", location.coords);
-        } catch (locationError) {
-          console.error("Error getting location:", locationError);
-        }
-      }
-
-      // Take the photo
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 1,
-        exif: true,
-      });
+      // Take photo and get location in PARALLEL for speed
+      const [photo, location] = await Promise.all([
+        cameraRef.current.takePictureAsync({
+          quality: 0.85, // Good balance between quality and speed
+          exif: true,
+          skipProcessing: false, // Process for better performance
+        }),
+        locationPermission?.granted
+          ? Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced, // Balanced is faster than High
+            }).catch((error) => {
+              console.error("Error getting location:", error);
+              return null;
+            })
+          : Promise.resolve(null),
+      ]);
 
       console.log("Photo taken:", photo);
 
       if (!photo || !photo.uri) {
         throw new Error("Photo URI is missing");
       }
+
+      // Show immediate feedback - photo captured successfully
+      console.log("Photo captured, processing...");
 
       let finalUri = photo.uri;
 
@@ -187,12 +187,19 @@ export default function CameraScreen() {
           const photoFile = new File(photo.uri);
           const arrayBuffer = await photoFile.arrayBuffer();
 
-          // Convert ArrayBuffer to base64
+          // Optimized: Convert ArrayBuffer to base64 using chunks for speed
           const inputBytes = new Uint8Array(arrayBuffer);
+          const chunkSize = 32768; // Process in 32KB chunks for better performance
           let binary = "";
-          for (let i = 0; i < inputBytes.length; i++) {
-            binary += String.fromCharCode(inputBytes[i]);
+
+          for (let i = 0; i < inputBytes.length; i += chunkSize) {
+            const chunk = inputBytes.subarray(
+              i,
+              Math.min(i + chunkSize, inputBytes.length)
+            );
+            binary += String.fromCharCode(...chunk);
           }
+
           const base64 = btoa(binary);
 
           // Create data URI for piexif
@@ -242,11 +249,17 @@ export default function CameraScreen() {
           const newPhotoFile = new File(Paths.cache, `photo_${Date.now()}.jpg`);
           const newBase64 = newImageData.replace("data:image/jpeg;base64,", "");
 
-          // Convert base64 to Uint8Array for writing
+          // Optimized: Convert base64 to Uint8Array using chunks
           const binaryString = atob(newBase64);
           const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
+
+          // Use chunks for faster conversion
+          const writeChunkSize = 32768;
+          for (let i = 0; i < binaryString.length; i += writeChunkSize) {
+            const end = Math.min(i + writeChunkSize, binaryString.length);
+            for (let j = i; j < end; j++) {
+              bytes[j] = binaryString.charCodeAt(j);
+            }
           }
 
           newPhotoFile.write(bytes);
@@ -271,17 +284,12 @@ export default function CameraScreen() {
         );
       }
 
+      // Simple, fast success message
       const successMessage = location
-        ? `Photo saved with GPS location!\n\nLat: ${location.coords.latitude.toFixed(
-            6
-          )}, Lng: ${location.coords.longitude.toFixed(
-            6
-          )}\n\nYou can now view the location in the iOS Photos app. Open the photo and swipe up to see it on the map!`
-        : "Photo saved!\n\nEnable location permission in Settings to save GPS data with your photos.";
+        ? `Photo saved with location! 📍\n\nSwipe up in Photos app to view on map.`
+        : "Photo saved!\n\nEnable location in Settings to tag photos.";
 
-      Alert.alert("Success", successMessage, [
-        { text: "OK", onPress: () => {} },
-      ]);
+      Alert.alert("Success", successMessage);
     } catch (error: any) {
       console.error("Error taking picture:", error);
 
