@@ -24,6 +24,8 @@ const MAPPING = {
   "map.fill": "map",
   "photo.fill": "photo-library",
   "camera.fill": "camera-alt",
+  "location.fill": "location-on",
+  "plus": "add",
 } as IconMapping;
 
 /**

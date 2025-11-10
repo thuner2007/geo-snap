@@ -14,7 +14,10 @@ export default function CameraScreen() {
       >
         <Text style={styles.closeIcon}>✕</Text>
       </TouchableOpacity>
-      <Text style={styles.text}>Camera Page</Text>
+      <Text style={styles.text}>Camera Feature - In Development</Text>
+      <Text style={styles.subtext}>
+        Wird von einem anderen Team-Mitglied entwickelt
+      </Text>
     </ThemedView>
   );
 }
@@ -28,6 +31,11 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 24,
     fontWeight: "600",
+  },
+  subtext: {
+    fontSize: 14,
+    color: "#666666",
+    marginTop: 8,
   },
   closeButton: {
     position: "absolute",

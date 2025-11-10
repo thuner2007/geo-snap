@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen.",
+        "NSPhotoLibraryUsageDescription": "Geo-Snap benötigt Zugriff auf deine Galerie, um Fotos mit Standorten anzuzeigen."
       }
     },
     "android": {
@@ -26,7 +27,9 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
       ],
       "config": {
         "googleMaps": {
@@ -44,6 +47,13 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Geo-Snap benötigt Zugriff auf deinen Standort, um Fotos mit ihrem Aufnahmeort zu verknüpfen."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Geo-Snap benötigt Zugriff auf deine Galerie, um Fotos mit Standorten anzuzeigen.",
+          "isAccessMediaLocationEnabled": true
         }
       ],
       [
