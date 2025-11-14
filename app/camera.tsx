@@ -1,8 +1,8 @@
 import { ThemedView } from "@/components/themed-view";
 import Feather from "@expo/vector-icons/Feather";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import { savePhotoWithGPS } from "exif-media-library";
 import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
-import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
@@ -20,7 +20,6 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import { savePhotoWithGPS, readGPSExif } from "exif-media-library";
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -86,20 +85,7 @@ export default function CameraScreen() {
           return;
         }
       }
-
-      // Open image picker to view gallery
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 1,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        // You can handle the selected image here if needed
-        console.log("Selected image:", result.assets[0].uri);
-      }
-    } catch (error) {
-      console.error("Error opening gallery:", error);
+    } catch {
       Alert.alert("Error", "Failed to open gallery.");
     }
   };
@@ -134,96 +120,43 @@ export default function CameraScreen() {
         }
       }
 
-      console.log("Taking picture...");
-
-      // Take photo and get location in PARALLEL for speed
+      // Take photo and get location
       const [photo, location] = await Promise.all([
         cameraRef.current.takePictureAsync({
-          quality: 0.85, // Good balance between quality and speed
+          quality: 0.85, // Less quality for better speed
           exif: true,
           skipProcessing: false, // Process for better performance
         }),
         locationPermission?.granted
           ? Location.getCurrentPositionAsync({
               accuracy: Location.Accuracy.Balanced, // Balanced is faster than High
-            }).catch((error) => {
-              console.error("Error getting location:", error);
-              return null;
-            })
+            }).catch(() => null)
           : Promise.resolve(null),
       ]);
-
-      console.log("Photo taken:", photo);
 
       if (!photo || !photo.uri) {
         throw new Error("Photo URI is missing");
       }
 
-      // Show immediate feedback - photo captured successfully
-      console.log("Photo captured, processing...");
-
       // Save to gallery with GPS EXIF using native module
-      console.log("Saving to gallery with GPS EXIF...");
-      console.log("Platform.OS:", Platform.OS);
-      console.log("Has location:", !!location);
-
-      let asset;
-      let assetId;
-
       if (location) {
         try {
           const { latitude, longitude } = location.coords;
           const altitude = location.coords.altitude || 0;
 
-          console.log(
-            `GPS Data - Lat: ${latitude}, Lng: ${longitude}, Alt: ${altitude}`
-          );
-
           // Use native module to save with GPS EXIF preserved
-          console.log("Using native ExifMediaLibrary module...");
           const result = await savePhotoWithGPS(photo.uri, {
             latitude,
             longitude,
             altitude,
           });
 
-          if (result.success) {
-            console.log("✓ Photo saved to gallery with GPS EXIF!");
-            console.log(`  Asset ID: ${result.assetId}`);
-            console.log(`  URI: ${result.uri}`);
-
-            assetId = result.assetId;
-
-            // Verify GPS was preserved (on Android, read from gallery file)
-            if (Platform.OS === "android" && result.uri) {
-              try {
-                const verification = await readGPSExif(result.uri);
-                if (verification) {
-                  console.log("✓✓ GPS EXIF VERIFIED in gallery photo!");
-                  console.log(`  Lat: ${verification.latitude.toFixed(6)}, Lng: ${verification.longitude.toFixed(6)}`);
-                } else {
-                  console.log("⚠ Could not verify GPS EXIF (but should be there)");
-                }
-              } catch (verifyError) {
-                console.log("Verification check failed:", verifyError);
-              }
-            }
-
-            // Create a simple asset object for compatibility
-            asset = {
-              id: result.assetId,
-              uri: result.uri,
-            };
-          } else {
+          if (!result.success) {
             throw new Error(result.error || "Failed to save with GPS");
           }
-        } catch (nativeError) {
-          console.error("Native module save failed:", nativeError);
-          console.log("Falling back to standard MediaLibrary...");
-
+        } catch {
           // Fallback to standard MediaLibrary (will lose GPS on Android)
-          asset = await MediaLibrary.createAssetAsync(photo.uri);
-          assetId = asset.id;
+          await MediaLibrary.createAssetAsync(photo.uri);
 
           Alert.alert(
             "Note",
@@ -231,13 +164,8 @@ export default function CameraScreen() {
           );
         }
       } else {
-        console.log("No location available - saving photo without GPS data");
-        asset = await MediaLibrary.createAssetAsync(photo.uri);
-        assetId = asset.id;
+        await MediaLibrary.createAssetAsync(photo.uri);
       }
-
-      console.log("✓ Photo saved to gallery");
-      console.log(`  Asset ID: ${assetId}`);
 
       // Platform-specific success message
       const successMessage = location
@@ -248,8 +176,6 @@ export default function CameraScreen() {
 
       Alert.alert("Success", successMessage);
     } catch (error: any) {
-      console.error("Error taking picture:", error);
-
       let errorMessage = "Failed to take or save photo. Please try again.";
 
       if (error.message) {
