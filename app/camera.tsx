@@ -129,7 +129,7 @@ export default function CameraScreen() {
         }),
         locationPermission?.granted
           ? Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Balanced, // Balanced is faster than High
+              accuracy: Location.Accuracy.Balanced,
             }).catch(() => null)
           : Promise.resolve(null),
       ]);
@@ -138,13 +138,12 @@ export default function CameraScreen() {
         throw new Error("Photo URI is missing");
       }
 
-      // Save to gallery with GPS EXIF using native module
+      // Save to gallery with GPS EXIF if location is available
       if (location) {
         try {
           const { latitude, longitude } = location.coords;
           const altitude = location.coords.altitude || 0;
 
-          // Use native module to save with GPS EXIF preserved
           const result = await savePhotoWithGPS(photo.uri, {
             latitude,
             longitude,
@@ -167,11 +166,10 @@ export default function CameraScreen() {
         await MediaLibrary.createAssetAsync(photo.uri);
       }
 
-      // Platform-specific success message
       const successMessage = location
         ? Platform.OS === "android"
-          ? `Photo saved with GPS location! 📍\n\nOpen in Google Photos to see the location on the map.`
-          : `Photo saved with location! 📍\n\nSwipe up in Photos app to view on map.`
+          ? `Photo saved with GPS location!\n\nOpen in Photos app to see the location on the map.`
+          : `Photo saved with location!\n\nSwipe up in Photos app to view on map.`
         : "Photo saved!\n\nEnable location permissions to tag photos with GPS coordinates.";
 
       Alert.alert("Success", successMessage);
@@ -192,7 +190,7 @@ export default function CameraScreen() {
     }
   };
 
-  // Check if permissions are not determined yet
+  // Check if permissions are still loading
   if (!cameraPermission || !mediaPermission) {
     return (
       <ThemedView style={styles.container}>

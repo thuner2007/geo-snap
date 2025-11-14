@@ -14,9 +14,7 @@ export interface MapRegion {
   longitudeDelta: number;
 }
 
-/**
- * Calculates the distance between two coordinates in kilometers using Haversine formula
- */
+// Calculates the distance between two coordinates in kilometers using Haversine formula
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // Earth's radius in km
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -31,29 +29,25 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return R * c;
 }
 
-/**
- * Calculate clustering radius based on map zoom level (latitudeDelta)
- * Smaller latitudeDelta = more zoomed in = smaller cluster radius
- */
+ //Calculate clustering radius based on map zoom level (latitudeDelta)
+ // Smaller latitudeDelta = more zoomed in = smaller cluster radius
 function getClusterRadius(latitudeDelta: number | undefined): number {
   if (!latitudeDelta) return 5; // Default 5km
 
-  if (latitudeDelta > 50) return 300;   // Very zoomed out - cluster within 300km
-  if (latitudeDelta > 20) return 150;   // Zoomed out - cluster within 150km
-  if (latitudeDelta > 10) return 75;    // Medium zoom - cluster within 75km
-  if (latitudeDelta > 5) return 40;     // Medium-close - cluster within 40km
-  if (latitudeDelta > 2) return 15;     // Getting close - cluster within 15km
-  if (latitudeDelta > 1) return 8;      // Close - cluster within 8km
-  if (latitudeDelta > 0.5) return 3;    // Very close - cluster within 3km
-  if (latitudeDelta > 0.2) return 1;    // Very zoomed in - cluster within 1km
-  if (latitudeDelta > 0.05) return 0.3; // Extremely zoomed in - cluster within 300m
-  return 0.1; // Maximum zoom - cluster within 100m
+  if (latitudeDelta > 50) return 300;
+  if (latitudeDelta > 20) return 150;
+  if (latitudeDelta > 10) return 75;
+  if (latitudeDelta > 5) return 40;
+  if (latitudeDelta > 2) return 15;
+  if (latitudeDelta > 1) return 8;
+  if (latitudeDelta > 0.5) return 3;
+  if (latitudeDelta > 0.2) return 1;
+  if (latitudeDelta > 0.05) return 0.3;
+  return 0.1;
 }
 
-/**
- * Groups photos by geographic proximity with zoom-based clustering
- * The cluster radius adjusts based on the map zoom level
- */
+ // Groups photos by geographic proximity with zoom-based clustering
+ // The cluster radius adjusts based on the map zoom level
 export function groupPhotosByLocation(photos: Photo[], region?: MapRegion | null): PhotoGroup[] {
   if (!photos || photos.length === 0) {
     return [];
