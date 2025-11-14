@@ -1,0 +1,16 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /home/paedu/privat/uk/geo-snap/modules/exif-media-library/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15421895982375333445.xml:2:13-83
+INJECTED from /home/paedu/privat/uk/geo-snap/modules/exif-media-library/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15421895982375333445.xml:2:13-83
+	package
+		INJECTED from /home/paedu/privat/uk/geo-snap/modules/exif-media-library/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15421895982375333445.xml
+	xmlns:android
+		ADDED from /home/paedu/privat/uk/geo-snap/modules/exif-media-library/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15421895982375333445.xml:2:23-81
+uses-sdk
+INJECTED from /home/paedu/privat/uk/geo-snap/modules/exif-media-library/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15421895982375333445.xml reason: use-sdk injection requested
+INJECTED from /home/paedu/privat/uk/geo-snap/modules/exif-media-library/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15421895982375333445.xml
+INJECTED from /home/paedu/privat/uk/geo-snap/modules/exif-media-library/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15421895982375333445.xml
+	android:targetSdkVersion
+		INJECTED from /home/paedu/privat/uk/geo-snap/modules/exif-media-library/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15421895982375333445.xml
+	android:minSdkVersion
+		INJECTED from /home/paedu/privat/uk/geo-snap/modules/exif-media-library/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest15421895982375333445.xml

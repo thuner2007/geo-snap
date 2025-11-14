@@ -106,6 +106,8 @@ export function PhotoMapView({ photos = [], onMarkerPress, onGroupPress }: Photo
               latitude: group.latitude,
               longitude: group.longitude,
             }}
+            anchor={{ x: 0.5, y: 0.5 }}
+            centerOffset={{ x: 0, y: 0 }}
             onPress={() => {
               if (group.photos.length === 1) {
                 onMarkerPress?.(group.photos[0]);

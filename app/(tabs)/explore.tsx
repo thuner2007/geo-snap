@@ -34,7 +34,7 @@ export default function GalleryScreen() {
 
   const handleShowOnMap = (photo: Photo) => {
     // Navigate to map tab (index)
-    router.push("/(tabs)/");
+    router.push("/");
   };
 
   if (loading) {

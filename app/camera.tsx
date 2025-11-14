@@ -2,8 +2,6 @@ import { ThemedView } from "@/components/themed-view";
 import Feather from "@expo/vector-icons/Feather";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
-import { File, Paths } from "expo-file-system";
-import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
@@ -22,9 +20,7 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const piexif = require("piexifjs");
+import { savePhotoWithGPS, readGPSExif } from "exif-media-library";
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -166,14 +162,16 @@ export default function CameraScreen() {
       // Show immediate feedback - photo captured successfully
       console.log("Photo captured, processing...");
 
-      let finalUri = photo.uri;
+      // Save to gallery with GPS EXIF using native module
+      console.log("Saving to gallery with GPS EXIF...");
+      console.log("Platform.OS:", Platform.OS);
+      console.log("Has location:", !!location);
 
-      // If we have location, embed GPS EXIF data properly
+      let asset;
+      let assetId;
+
       if (location) {
         try {
-          console.log("Embedding GPS EXIF data...");
-          console.log(`Platform: ${Platform.OS}`);
-
           const { latitude, longitude } = location.coords;
           const altitude = location.coords.altitude || 0;
 
@@ -181,229 +179,72 @@ export default function CameraScreen() {
             `GPS Data - Lat: ${latitude}, Lng: ${longitude}, Alt: ${altitude}`
           );
 
-          // Convert decimal degrees to degrees, minutes, seconds (EXIF GPS format)
-          const toDegreesMinutesSeconds = (decimal: number) => {
-            const absolute = Math.abs(decimal);
-            const degrees = Math.floor(absolute);
-            const minutesFloat = (absolute - degrees) * 60;
-            const minutes = Math.floor(minutesFloat);
-            const seconds = (minutesFloat - minutes) * 60;
+          // Use native module to save with GPS EXIF preserved
+          console.log("Using native ExifMediaLibrary module...");
+          const result = await savePhotoWithGPS(photo.uri, {
+            latitude,
+            longitude,
+            altitude,
+          });
 
-            return [
-              [degrees, 1],
-              [minutes, 1],
-              [Math.round(seconds * 100), 100],
-            ];
-          };
+          if (result.success) {
+            console.log("✓ Photo saved to gallery with GPS EXIF!");
+            console.log(`  Asset ID: ${result.assetId}`);
+            console.log(`  URI: ${result.uri}`);
 
-          // Read the image file
-          const photoFile = new File(photo.uri);
-          const arrayBuffer = await photoFile.arrayBuffer();
+            assetId = result.assetId;
 
-          // Optimized: Convert ArrayBuffer to base64 using chunks for speed
-          const inputBytes = new Uint8Array(arrayBuffer);
-          const chunkSize = 32768; // Process in 32KB chunks for better performance
-          let binary = "";
-
-          for (let i = 0; i < inputBytes.length; i += chunkSize) {
-            const chunk = inputBytes.subarray(
-              i,
-              Math.min(i + chunkSize, inputBytes.length)
-            );
-            binary += String.fromCharCode(...chunk);
-          }
-
-          const base64 = btoa(binary);
-
-          // Create data URI for piexif
-          const imageData = `data:image/jpeg;base64,${base64}`;
-
-          // Load existing EXIF or create new
-          let exifObj;
-          try {
-            exifObj = piexif.load(imageData);
-          } catch {
-            exifObj = { "0th": {}, Exif: {}, GPS: {}, Interop: {}, "1st": {} };
-          }
-
-          // Add GPS data with proper EXIF tags
-          exifObj.GPS[piexif.GPSIFD.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
-          exifObj.GPS[piexif.GPSIFD.GPSLatitude] =
-            toDegreesMinutesSeconds(latitude);
-          exifObj.GPS[piexif.GPSIFD.GPSLongitudeRef] =
-            longitude >= 0 ? "E" : "W";
-          exifObj.GPS[piexif.GPSIFD.GPSLongitude] =
-            toDegreesMinutesSeconds(longitude);
-          exifObj.GPS[piexif.GPSIFD.GPSAltitudeRef] = altitude >= 0 ? 0 : 1;
-          exifObj.GPS[piexif.GPSIFD.GPSAltitude] = [
-            Math.abs(Math.round(altitude * 100)),
-            100,
-          ];
-
-          // Add GPS timestamp
-          const now = new Date();
-          exifObj.GPS[piexif.GPSIFD.GPSDateStamp] = now
-            .toISOString()
-            .split("T")[0]
-            .replace(/-/g, ":");
-          exifObj.GPS[piexif.GPSIFD.GPSTimeStamp] = [
-            [now.getUTCHours(), 1],
-            [now.getUTCMinutes(), 1],
-            [now.getUTCSeconds(), 1],
-          ];
-
-          // Add GPS processing method and version (important for Android)
-          exifObj.GPS[piexif.GPSIFD.GPSVersionID] = [2, 2, 0, 0];
-          exifObj.GPS[piexif.GPSIFD.GPSMapDatum] = "WGS-84";
-
-          console.log("EXIF GPS object:", JSON.stringify(exifObj.GPS, null, 2));
-
-          // Dump EXIF to binary
-          const exifBytes = piexif.dump(exifObj);
-
-          // Insert EXIF into image
-          const newImageData = piexif.insert(exifBytes, imageData);
-
-          // Write the new image with GPS EXIF to file system
-          const timestamp = Date.now();
-          const fileName =
-            Platform.OS === "android"
-              ? `GPS_PHOTO_${timestamp}.jpg`
-              : `photo_${timestamp}.jpg`;
-          const newPhotoFile = new File(Paths.cache, fileName);
-          const newBase64 = newImageData.replace("data:image/jpeg;base64,", "");
-
-          // Optimized: Convert base64 to Uint8Array using chunks
-          const binaryString = atob(newBase64);
-          const bytes = new Uint8Array(binaryString.length);
-
-          // Use chunks for faster conversion
-          const writeChunkSize = 32768;
-          for (let i = 0; i < binaryString.length; i += writeChunkSize) {
-            const end = Math.min(i + writeChunkSize, binaryString.length);
-            for (let j = i; j < end; j++) {
-              bytes[j] = binaryString.charCodeAt(j);
+            // Verify GPS was preserved (on Android, read from gallery file)
+            if (Platform.OS === "android" && result.uri) {
+              try {
+                const verification = await readGPSExif(result.uri);
+                if (verification) {
+                  console.log("✓✓ GPS EXIF VERIFIED in gallery photo!");
+                  console.log(`  Lat: ${verification.latitude.toFixed(6)}, Lng: ${verification.longitude.toFixed(6)}`);
+                } else {
+                  console.log("⚠ Could not verify GPS EXIF (but should be there)");
+                }
+              } catch (verifyError) {
+                console.log("Verification check failed:", verifyError);
+              }
             }
+
+            // Create a simple asset object for compatibility
+            asset = {
+              id: result.assetId,
+              uri: result.uri,
+            };
+          } else {
+            throw new Error(result.error || "Failed to save with GPS");
           }
+        } catch (nativeError) {
+          console.error("Native module save failed:", nativeError);
+          console.log("Falling back to standard MediaLibrary...");
 
-          // Write the file
-          await newPhotoFile.write(bytes);
+          // Fallback to standard MediaLibrary (will lose GPS on Android)
+          asset = await MediaLibrary.createAssetAsync(photo.uri);
+          assetId = asset.id;
 
-          // Verify file was written (especially important on Android)
-          console.log("Verifying file write...");
-          const fileExists = newPhotoFile.exists;
-          if (!fileExists) {
-            throw new Error("Failed to write file with GPS EXIF data");
-          }
-          console.log("File verified, size:", bytes.length, "bytes");
-
-          // For Android, also write using legacy API to ensure EXIF preservation
-          if (Platform.OS === "android") {
-            try {
-              console.log("Android: Verifying file with legacy API...");
-              // The file is already written, but we verify it's accessible
-              const fileInfo = await FileSystem.getInfoAsync(newPhotoFile.uri);
-              console.log("Legacy file info:", fileInfo);
-            } catch (legacyError) {
-              console.log(
-                "Legacy API check failed (not critical):",
-                legacyError
-              );
-            }
-          }
-
-          finalUri = newPhotoFile.uri;
-          console.log("GPS EXIF data embedded successfully");
-          console.log("New photo URI:", finalUri);
-        } catch (exifError) {
-          console.error("Error embedding GPS EXIF:", exifError);
-          console.error("EXIF error details:", exifError);
-          // Continue with original photo
+          Alert.alert(
+            "Note",
+            "Photo saved, but GPS location may not be preserved due to a technical limitation."
+          );
         }
       } else {
         console.log("No location available - saving photo without GPS data");
+        asset = await MediaLibrary.createAssetAsync(photo.uri);
+        assetId = asset.id;
       }
 
-      // Save to gallery
-      console.log("Saving to gallery...");
-      console.log("Final URI to save:", finalUri);
-      console.log("Platform.OS:", Platform.OS);
-      console.log("Has location:", !!location);
-
-      let asset;
-
-      if (Platform.OS === "android" && location) {
-        // Android EXIF preservation workaround:
-        // MediaLibrary.createAssetAsync strips EXIF on Android!
-        // Solution: Save directly to DCIM folder, then scan
-        console.log("Android: Using EXIF-preserving save method...");
-
-        try {
-          // Step 1: Determine DCIM path (Android's standard photo location)
-          const timestamp = Date.now();
-          const fileName = `GPS_PHOTO_${timestamp}.jpg`;
-
-          // Save to a path that MediaLibrary can find
-          const tempPath = `${FileSystem.documentDirectory}${fileName}`;
-
-          console.log("Step 1: Copying EXIF-embedded file to:", tempPath);
-          await FileSystem.copyAsync({
-            from: finalUri,
-            to: tempPath,
-          });
-
-          console.log("Step 2: Moving to gallery via MediaLibrary...");
-          // Create asset from our already-saved file with EXIF
-          asset = await MediaLibrary.createAssetAsync(tempPath);
-
-          // Verify the asset was created
-          if (asset && asset.uri) {
-            console.log("Asset created successfully at:", asset.uri);
-
-            // Try to get the asset info to see if EXIF is preserved
-            const assetInfo = await MediaLibrary.getAssetInfoAsync(asset);
-            console.log(
-              "Asset info with location:",
-              JSON.stringify(assetInfo, null, 2)
-            );
-          }
-
-          console.log("Android: Asset saved with EXIF data");
-        } catch (androidError) {
-          console.error("Android EXIF preservation failed:", androidError);
-          console.error("Error details:", JSON.stringify(androidError));
-          // Fallback to standard method
-          asset = await MediaLibrary.createAssetAsync(finalUri);
-        }
-      } else {
-        // iOS or no location - standard save
-        console.log("Using standard save method (iOS or no location)");
-        asset = await MediaLibrary.createAssetAsync(finalUri);
-      }
-      console.log("Photo saved to gallery:", asset);
-      console.log("Asset URI:", asset.uri);
-      console.log("Asset details:", JSON.stringify(asset, null, 2));
-
-      // On Android, trigger media scanner to ensure gallery picks up EXIF
-      if (Platform.OS === "android" && location) {
-        console.log(
-          "Android: Requesting media scanner to pick up EXIF data..."
-        );
-        // The gallery should automatically scan, but log for debugging
-      }
-
-      if (location) {
-        console.log(
-          `GPS Coordinates: Lat ${location.coords.latitude}, Lng ${location.coords.longitude}`
-        );
-      }
+      console.log("✓ Photo saved to gallery");
+      console.log(`  Asset ID: ${assetId}`);
 
       // Platform-specific success message
       const successMessage = location
         ? Platform.OS === "android"
-          ? `Photo saved with location! 📍\n\nOpen Google Photos to see location on map.`
+          ? `Photo saved with GPS location! 📍\n\nOpen in Google Photos to see the location on the map.`
           : `Photo saved with location! 📍\n\nSwipe up in Photos app to view on map.`
-        : "Photo saved!\n\nEnable location in Settings to tag photos.";
+        : "Photo saved!\n\nEnable location permissions to tag photos with GPS coordinates.";
 
       Alert.alert("Success", successMessage);
     } catch (error: any) {
