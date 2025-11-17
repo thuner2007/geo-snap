@@ -1,0 +1,7 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`IconSymbol Component should match snapshot with custom size and color 1`] = `null`;
+
+exports[`IconSymbol Component should match snapshot with default props 1`] = `null`;
+
+exports[`IconSymbol Component should match snapshot with location icon 1`] = `null`;
