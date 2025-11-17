@@ -8,10 +8,15 @@ import {
   StatusBar,
   Dimensions,
   ScrollView,
+  Alert,
 } from "react-native";
 import { Image } from "expo-image";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Photo } from "@/types/photo";
+import MapView, { Marker } from "react-native-maps";
+import * as Sharing from "expo-sharing";
+import { navigationStore } from "@/store/navigation-store";
+import { useRouter } from "expo-router";
 
 interface PhotoDetailModalProps {
   photo: Photo | null;
@@ -28,7 +33,44 @@ export function PhotoDetailModal({
   onClose,
   onShowOnMap,
 }: PhotoDetailModalProps) {
+  const router = useRouter();
+
   if (!photo) return null;
+
+  const handleShare = async () => {
+    try {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert(
+          "Teilen nicht verfügbar",
+          "Das Teilen wird auf diesem Gerät nicht unterstützt."
+        );
+        return;
+      }
+
+      await Sharing.shareAsync(photo.uri, {
+        mimeType: "image/jpeg",
+        dialogTitle: `Foto von ${photo.locationName || "Unbekannter Ort"}`,
+      });
+    } catch (error) {
+      console.error("Error sharing photo:", error);
+      Alert.alert(
+        "Fehler beim Teilen",
+        "Das Foto konnte nicht geteilt werden."
+      );
+    }
+  };
+
+  const handleGoHome = () => {
+    // Set focused photo in navigation store
+    navigationStore.setFocusedPhoto(photo);
+    // Close modal
+    onClose();
+    // Navigate to home/map tab
+    setTimeout(() => {
+      router.push("/");
+    }, 300);
+  };
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -77,10 +119,18 @@ export function PhotoDetailModal({
             </Text>
           </View>
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.iconButton} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              activeOpacity={0.8}
+              onPress={handleShare}
+            >
               <IconSymbol name="paperplane.fill" size={22} color="#FFFFFF" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              activeOpacity={0.8}
+              onPress={handleGoHome}
+            >
               <IconSymbol name="house.fill" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
@@ -142,13 +192,41 @@ export function PhotoDetailModal({
           {/* Mini Map Card */}
           <View style={styles.infoCard}>
             <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>MINI-KARTE</Text>
+              <IconSymbol name="map.fill" size={20} color="#F59E0B" />
+              <Text style={styles.cardTitle}>STANDORT</Text>
             </View>
-            <View style={styles.miniMapPlaceholder}>
-              <View style={styles.mapMarker}>
-                <IconSymbol name="location.fill" size={32} color="#EF4444" />
-              </View>
-            </View>
+            <TouchableOpacity
+              style={styles.miniMapContainer}
+              onPress={() => {
+                if (onShowOnMap) {
+                  onClose();
+                  setTimeout(() => onShowOnMap(photo), 300);
+                }
+              }}
+              activeOpacity={0.9}
+            >
+              <MapView
+                style={styles.miniMap}
+                initialRegion={{
+                  latitude: photo.latitude,
+                  longitude: photo.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                rotateEnabled={false}
+                pitchEnabled={false}
+              >
+                <Marker
+                  coordinate={{
+                    latitude: photo.latitude,
+                    longitude: photo.longitude,
+                  }}
+                  title={photo.locationName}
+                />
+              </MapView>
+            </TouchableOpacity>
             {onShowOnMap && (
               <TouchableOpacity
                 style={styles.mapButton}
@@ -158,7 +236,8 @@ export function PhotoDetailModal({
                 }}
                 activeOpacity={0.8}
               >
-                <Text style={styles.mapButtonText}>In Karte öffnen →</Text>
+                <IconSymbol name="map.fill" size={18} color="#000000" />
+                <Text style={styles.mapButtonText}>In Karte öffnen</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -285,18 +364,16 @@ const styles = StyleSheet.create({
   fileIcon: {
     fontSize: 18,
   },
-  miniMapPlaceholder: {
+  miniMapContainer: {
     width: "100%",
     height: 200,
-    backgroundColor: "#C8E6F5",
     borderRadius: 12,
+    overflow: "hidden",
     marginTop: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    position: "relative",
   },
-  mapMarker: {
-    position: "absolute",
+  miniMap: {
+    width: "100%",
+    height: "100%",
   },
   mapButton: {
     marginTop: 16,
@@ -305,6 +382,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 8,
     alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
   },
   mapButtonText: {
     fontSize: 15,

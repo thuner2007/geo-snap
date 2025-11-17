@@ -2,12 +2,14 @@ import { ThemedView } from "@/components/themed-view";
 import { PhotoGalleryView } from "@/components/gallery/photo-gallery-view";
 import { PhotoGalleryHeader } from "@/components/gallery/photo-gallery-header";
 import { PhotoDetailModal } from "@/components/gallery/photo-detail-modal";
+import { PhotoLocationGroupModal } from "@/components/gallery/photo-location-group-modal";
 import { usePhotos } from "@/hooks/use-photos";
 import { useState } from "react";
 import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Photo } from "@/types/photo";
 import { useRouter } from "expo-router";
+import { navigationStore } from "@/store/navigation-store";
 
 export default function GalleryScreen() {
   const router = useRouter();
@@ -21,6 +23,9 @@ export default function GalleryScreen() {
 
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [groupPhotos, setGroupPhotos] = useState<Photo[]>([]);
+  const [groupLocationName, setGroupLocationName] = useState<string | undefined>();
+  const [isGroupModalVisible, setIsGroupModalVisible] = useState(false);
 
   const handlePhotoPress = (photo: Photo) => {
     setSelectedPhoto(photo);
@@ -33,8 +38,29 @@ export default function GalleryScreen() {
   };
 
   const handleShowOnMap = (photo: Photo) => {
+    // Set the focused photo in the navigation store
+    navigationStore.setFocusedPhoto(photo);
     // Navigate to map tab (index)
     router.push("/");
+  };
+
+  const handleGroupPress = (photos: Photo[], locationName?: string) => {
+    setGroupPhotos(photos);
+    setGroupLocationName(locationName);
+    setIsGroupModalVisible(true);
+  };
+
+  const handleCloseGroupModal = () => {
+    setIsGroupModalVisible(false);
+    setTimeout(() => {
+      setGroupPhotos([]);
+      setGroupLocationName(undefined);
+    }, 300);
+  };
+
+  const handlePhotoSelectFromGroup = (photo: Photo) => {
+    setSelectedPhoto(photo);
+    setIsModalVisible(true);
   };
 
   if (loading) {
@@ -101,6 +127,7 @@ export default function GalleryScreen() {
         <PhotoGalleryView
           photos={photos}
           onPhotoPress={handlePhotoPress}
+          onGroupPress={handleGroupPress}
         />
       )}
 
@@ -109,6 +136,14 @@ export default function GalleryScreen() {
         visible={isModalVisible}
         onClose={handleCloseModal}
         onShowOnMap={handleShowOnMap}
+      />
+
+      <PhotoLocationGroupModal
+        photos={groupPhotos}
+        locationName={groupLocationName}
+        visible={isGroupModalVisible}
+        onClose={handleCloseGroupModal}
+        onPhotoSelect={handlePhotoSelectFromGroup}
       />
     </ThemedView>
   );

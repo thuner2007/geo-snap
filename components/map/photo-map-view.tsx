@@ -10,9 +10,10 @@ interface PhotoMapViewProps {
   photos?: Photo[];
   onMarkerPress?: (photo: Photo) => void;
   onGroupPress?: (photos: Photo[], locationName?: string) => void;
+  focusedPhoto?: Photo | null;
 }
 
-export function PhotoMapView({ photos = [], onMarkerPress, onGroupPress }: PhotoMapViewProps) {
+export function PhotoMapView({ photos = [], onMarkerPress, onGroupPress, focusedPhoto }: PhotoMapViewProps) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [hasPermission, setHasPermission] = useState(false);
   const [photoGroups, setPhotoGroups] = useState<PhotoGroup[]>([]);
@@ -85,6 +86,18 @@ export function PhotoMapView({ photos = [], onMarkerPress, onGroupPress }: Photo
       hasInitiallyFit.current = true;
     }
   }, [photoGroups]);
+
+  // Focus on a specific photo when provided
+  useEffect(() => {
+    if (focusedPhoto && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: focusedPhoto.latitude,
+        longitude: focusedPhoto.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 1000);
+    }
+  }, [focusedPhoto]);
 
   return (
     <View style={styles.container}>

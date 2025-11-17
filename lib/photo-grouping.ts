@@ -97,3 +97,46 @@ export function groupPhotosByLocation(photos: Photo[], region?: MapRegion | null
 
   return groups;
 }
+
+// Groups photos by exact location name (for gallery view)
+// This creates groups where all photos have the same location name
+export function groupPhotosByLocationName(photos: Photo[]): PhotoGroup[] {
+  if (!photos || photos.length === 0) {
+    return [];
+  }
+
+  const groupMap = new Map<string, Photo[]>();
+
+  // Group photos by location name
+  photos.forEach((photo) => {
+    const locationKey = photo.locationName || `${photo.latitude.toFixed(4)}, ${photo.longitude.toFixed(4)}`;
+
+    if (!groupMap.has(locationKey)) {
+      groupMap.set(locationKey, []);
+    }
+    groupMap.get(locationKey)!.push(photo);
+  });
+
+  // Convert map to PhotoGroup array
+  const groups: PhotoGroup[] = [];
+  groupMap.forEach((groupPhotos, locationName) => {
+    const avgLat = groupPhotos.reduce((sum, p) => sum + p.latitude, 0) / groupPhotos.length;
+    const avgLon = groupPhotos.reduce((sum, p) => sum + p.longitude, 0) / groupPhotos.length;
+
+    groups.push({
+      locationName,
+      photos: groupPhotos,
+      latitude: avgLat,
+      longitude: avgLon,
+    });
+  });
+
+  // Sort by most recent photo in each group
+  groups.sort((a, b) => {
+    const aNewest = Math.max(...a.photos.map(p => p.timestamp));
+    const bNewest = Math.max(...b.photos.map(p => p.timestamp));
+    return bNewest - aNewest;
+  });
+
+  return groups;
+}

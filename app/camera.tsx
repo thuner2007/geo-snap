@@ -20,6 +20,7 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
+import { runOnJS } from "react-native-reanimated";
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -53,44 +54,50 @@ export default function CameraScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Function to update zoom values (called from UI thread via runOnJS)
+  const updateZoom = (newZoom: number) => {
+    const clampedZoom = Math.max(0, Math.min(newZoom, 1));
+    setCurrentZoom(clampedZoom);
+    setZoomLevel(clampedZoom);
+  };
+
   // Pinch gesture handler for zoom with proper clamping
   const pinchGesture = Gesture.Pinch()
     .onStart(() => {
       baseZoom.current = currentZoom;
     })
     .onUpdate((event) => {
-      // Calculate new zoom based on pinch scale
+      // Validate scale value
       const scale = event.scale;
+      if (!isFinite(scale) || scale <= 0) {
+        return; // Skip invalid scale values
+      }
+
+      // Calculate new zoom based on pinch scale
       const newZoom = baseZoom.current + (scale - 1) * 0.5;
 
-      // Clamp zoom between 0 (no zoom) and 0.5 (50% zoom)
-      const clampedZoom = Math.max(0, Math.min(newZoom, 0.5));
-      setCurrentZoom(clampedZoom);
-      setZoomLevel(clampedZoom);
+      // Validate calculated zoom
+      if (!isFinite(newZoom)) {
+        return; // Skip invalid zoom values
+      }
+
+      // Use runOnJS to update state from UI thread
+      runOnJS(updateZoom)(newZoom);
     })
     .onEnd(() => {
       baseZoom.current = currentZoom;
     });
 
-  const openGallery = async () => {
-    try {
-      // Request media library permissions if not granted
-      if (!mediaPermission?.granted) {
-        const { status } = await requestMediaPermission();
-        if (status !== "granted") {
-          Alert.alert(
-            "Permission Required",
-            "Media library permission is required to access the gallery."
-          );
-          return;
-        }
-      }
-    } catch {
-      Alert.alert("Error", "Failed to open gallery.");
-    }
+  const openGallery = () => {
+    // Navigate to the explore (gallery) tab
+    router.push("/(tabs)/explore");
   };
 
   const toggleCameraFacing = () => {
+    // Reset zoom when switching cameras to prevent crashes
+    setCurrentZoom(0);
+    setZoomLevel(0);
+    baseZoom.current = 0;
     setFacing((current) => (current === "back" ? "front" : "back"));
   };
 

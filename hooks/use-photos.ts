@@ -19,7 +19,14 @@ export function usePhotos() {
 
       // Also check location permission for reverse geocoding
       const locationStatus = await Location.getForegroundPermissionsAsync();
-      setHasLocationPermission(locationStatus.granted);
+
+      // If location permission not granted, request it automatically
+      if (!locationStatus.granted) {
+        const requestResult = await Location.requestForegroundPermissionsAsync();
+        setHasLocationPermission(requestResult.granted);
+      } else {
+        setHasLocationPermission(locationStatus.granted);
+      }
 
       return status === 'granted';
     } catch (error) {
@@ -45,14 +52,34 @@ export function usePhotos() {
 
         if (result && result.length > 0) {
           const location = result[0];
-          if (location.name) {
-            return location.name;
-          } else if (location.street) {
-            return location.street;
+
+          // Build a readable location name with priority: city, country
+          const parts: string[] = [];
+
+          // Add city or district
+          if (location.city) {
+            parts.push(location.city);
           } else if (location.district) {
-            return location.district;
-          } else if (location.city) {
-            return location.city;
+            parts.push(location.district);
+          } else if (location.subregion) {
+            parts.push(location.subregion);
+          }
+
+          // Add country
+          if (location.country) {
+            parts.push(location.country);
+          }
+
+          // If we have location parts, return them
+          if (parts.length > 0) {
+            return parts.join(', ');
+          }
+
+          // Fallback to street/name if available
+          if (location.street) {
+            return location.street;
+          } else if (location.name) {
+            return location.name;
           }
         }
         return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
@@ -68,7 +95,7 @@ export function usePhotos() {
       // Get all photos from media library
       const { assets } = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
-        first: 100, // Load first 100 photos
+        first: 1000, // Load first 1000 photos
         sortBy: [[MediaLibrary.SortBy.creationTime, false]], // Newest first
       });
 

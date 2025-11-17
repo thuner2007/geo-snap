@@ -18,6 +18,7 @@ const MAPPING = {
   "chevron.right": "chevron-right",
   "map.fill": "map",
   "photo.fill": "photo-library",
+  "photo.stack": "photo-library",
   "camera.fill": "camera-alt",
   "location.fill": "location-on",
   "plus": "add",

@@ -3,11 +3,12 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { PhotoMapView } from "@/components/map/photo-map-view";
 import { PhotoDetailModal } from "@/components/gallery/photo-detail-modal";
 import { PhotoLocationGroupModal } from "@/components/gallery/photo-location-group-modal";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { usePhotos } from "@/hooks/use-photos";
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { StyleSheet, TouchableOpacity } from "react-native";
 import { Photo } from "@/types/photo";
+import { navigationStore } from "@/store/navigation-store";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -18,6 +19,29 @@ export default function HomeScreen() {
   const [groupPhotos, setGroupPhotos] = useState<Photo[]>([]);
   const [groupLocationName, setGroupLocationName] = useState<string | undefined>();
   const [isGroupModalVisible, setIsGroupModalVisible] = useState(false);
+  const [focusedPhoto, setFocusedPhoto] = useState<Photo | null>(null);
+
+  // Subscribe to navigation store for focused photo from other tabs
+  useEffect(() => {
+    const unsubscribe = navigationStore.subscribe((photo) => {
+      setFocusedPhoto(photo);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Check if there's a photo to focus on when tab gains focus
+  useFocusEffect(
+    useCallback(() => {
+      const photo = navigationStore.getFocusedPhoto();
+      if (photo) {
+        setFocusedPhoto(photo);
+        // Clear after using it
+        setTimeout(() => {
+          navigationStore.clearFocusedPhoto();
+        }, 1500);
+      }
+    }, [])
+  );
 
   const handleMarkerPress = (photo: Photo) => {
     setSelectedPhoto(photo);
@@ -48,12 +72,17 @@ export default function HomeScreen() {
     setIsModalVisible(true);
   };
 
+  const handleShowOnMap = (photo: Photo) => {
+    setFocusedPhoto(photo);
+  };
+
   return (
     <ThemedView style={styles.container}>
       <PhotoMapView
         photos={photos}
         onMarkerPress={handleMarkerPress}
         onGroupPress={handleGroupPress}
+        focusedPhoto={focusedPhoto}
       />
       <TouchableOpacity
         style={styles.fab}
@@ -67,6 +96,7 @@ export default function HomeScreen() {
         photo={selectedPhoto}
         visible={isModalVisible}
         onClose={handleCloseModal}
+        onShowOnMap={handleShowOnMap}
       />
 
       <PhotoLocationGroupModal

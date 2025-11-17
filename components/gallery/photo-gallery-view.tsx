@@ -10,10 +10,12 @@ import {
 import { Image } from "expo-image";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Photo } from "@/types/photo";
+import { PhotoGroup, groupPhotosByLocationName } from "@/lib/photo-grouping";
 
 interface PhotoGalleryViewProps {
   photos?: Photo[];
   onPhotoPress?: (photo: Photo) => void;
+  onGroupPress?: (photos: Photo[], locationName?: string) => void;
 }
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -35,20 +37,37 @@ const GRADIENT_COLORS = [
 export function PhotoGalleryView({
   photos = [],
   onPhotoPress,
+  onGroupPress,
 }: PhotoGalleryViewProps) {
-  const renderItem = ({ item, index }: { item: Photo; index: number }) => {
-    const backgroundColor =
-      GRADIENT_COLORS[index % GRADIENT_COLORS.length];
+  // Group photos by location name
+  const photoGroups = React.useMemo(() => {
+    return groupPhotosByLocationName(photos);
+  }, [photos]);
+
+  const renderItem = ({ item, index }: { item: PhotoGroup; index: number }) => {
+    const backgroundColor = GRADIENT_COLORS[index % GRADIENT_COLORS.length];
+    const photoCount = item.photos.length;
+    const firstPhoto = item.photos[0];
+
+    const handlePress = () => {
+      if (photoCount === 1) {
+        // Single photo - open detail modal directly
+        onPhotoPress?.(firstPhoto);
+      } else {
+        // Multiple photos - open group selection modal
+        onGroupPress?.(item.photos, item.locationName);
+      }
+    };
 
     return (
       <TouchableOpacity
         style={[styles.photoCard]}
-        onPress={() => onPhotoPress?.(item)}
+        onPress={handlePress}
         activeOpacity={0.9}
       >
-        {item.uri ? (
+        {firstPhoto.uri ? (
           <Image
-            source={{ uri: item.uri }}
+            source={{ uri: firstPhoto.uri }}
             style={styles.photoImage}
             contentFit="cover"
           />
@@ -66,6 +85,16 @@ export function PhotoGalleryView({
             />
           </View>
         )}
+
+        {/* Photo count badge (only show if more than 1 photo) */}
+        {photoCount > 1 && (
+          <View style={styles.countBadge}>
+            <IconSymbol name="photo.stack" size={16} color="#ffffff" />
+            <Text style={styles.countText}>{photoCount}</Text>
+          </View>
+        )}
+
+        {/* Location name overlay */}
         {item.locationName && (
           <View style={styles.locationOverlay}>
             <IconSymbol
@@ -85,9 +114,9 @@ export function PhotoGalleryView({
   return (
     <View style={styles.container}>
       <FlatList
-        data={photos}
+        data={photoGroups}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item, index) => `${item.locationName}-${index}`}
         numColumns={COLUMNS}
         columnWrapperStyle={styles.row}
         showsVerticalScrollIndicator={false}
@@ -130,6 +159,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  countBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  countText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
   locationOverlay: {
     position: "absolute",
     bottom: 0,
@@ -148,5 +194,4 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     flex: 1,
   },
-
 });
