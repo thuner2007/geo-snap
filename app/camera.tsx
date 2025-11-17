@@ -1,20 +1,26 @@
 import { ThemedView } from "@/components/themed-view";
 import Feather from "@expo/vector-icons/Feather";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import { savePhotoWithGPS } from "exif-media-library";
 import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
-import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  runOnJS,
-  useAnimatedProps,
-  useSharedValue,
-} from "react-native-reanimated";
-
-const AnimatedCameraView = Animated.createAnimatedComponent(CameraView);
+import {
+  Alert,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
+import { runOnJS } from "react-native-reanimated";
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -22,11 +28,13 @@ export default function CameraScreen() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [mediaPermission, requestMediaPermission] =
     MediaLibrary.usePermissions();
+  const [locationPermission, requestLocationPermission] =
+    Location.useForegroundPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(0);
-  const zoom = useSharedValue(0);
-  const baseZoom = useSharedValue(0);
+  const [currentZoom, setCurrentZoom] = useState(0);
+  const baseZoom = useRef(0);
 
   // Automatically request permissions when component mounts
   useEffect(() => {
@@ -37,70 +45,59 @@ export default function CameraScreen() {
       if (!mediaPermission?.granted) {
         await requestMediaPermission();
       }
+      if (!locationPermission?.granted) {
+        await requestLocationPermission();
+      }
     };
 
     requestPermissions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Function to update zoom values (called from UI thread via runOnJS)
+  const updateZoom = (newZoom: number) => {
+    const clampedZoom = Math.max(0, Math.min(newZoom, 1));
+    setCurrentZoom(clampedZoom);
+    setZoomLevel(clampedZoom);
+  };
+
   // Pinch gesture handler for zoom with proper clamping
   const pinchGesture = Gesture.Pinch()
     .onStart(() => {
-      baseZoom.value = zoom.value;
+      baseZoom.current = currentZoom;
     })
     .onUpdate((event) => {
-      // Calculate new zoom based on pinch scale
-      // scale of 1 = no zoom, scale > 1 = zoom in, scale < 1 = zoom out
+      // Validate scale value
       const scale = event.scale;
-      const newZoom = baseZoom.value + (scale - 1) * 0.5; // 0.5 factor for smoother zoom
+      if (!isFinite(scale) || scale <= 0) {
+        return; // Skip invalid scale values
+      }
 
-      // Clamp zoom between 0 (no zoom) and 0.5 (50% zoom) to prevent extreme zoom
-      const clampedZoom = Math.max(0, Math.min(newZoom, 0.5));
-      zoom.value = clampedZoom;
+      // Calculate new zoom based on pinch scale
+      const newZoom = baseZoom.current + (scale - 1) * 0.5;
 
-      // Update zoom level state for display (run on JS thread)
-      runOnJS(setZoomLevel)(clampedZoom);
+      // Validate calculated zoom
+      if (!isFinite(newZoom)) {
+        return; // Skip invalid zoom values
+      }
+
+      // Use runOnJS to update state from UI thread
+      runOnJS(updateZoom)(newZoom);
     })
     .onEnd(() => {
-      baseZoom.value = zoom.value;
+      baseZoom.current = currentZoom;
     });
 
-  const animatedProps = useAnimatedProps(() => ({
-    zoom: zoom.value,
-  }));
-
-  const openGallery = async () => {
-    try {
-      // Request media library permissions if not granted
-      if (!mediaPermission?.granted) {
-        const { status } = await requestMediaPermission();
-        if (status !== "granted") {
-          Alert.alert(
-            "Permission Required",
-            "Media library permission is required to access the gallery."
-          );
-          return;
-        }
-      }
-
-      // Open image picker to view gallery
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 1,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        // You can handle the selected image here if needed
-        console.log("Selected image:", result.assets[0].uri);
-      }
-    } catch (error) {
-      console.error("Error opening gallery:", error);
-      Alert.alert("Error", "Failed to open gallery.");
-    }
+  const openGallery = () => {
+    // Navigate to the explore (gallery) tab
+    router.push("/(tabs)/explore");
   };
 
   const toggleCameraFacing = () => {
+    // Reset zoom when switching cameras to prevent crashes
+    setCurrentZoom(0);
+    setZoomLevel(0);
+    baseZoom.current = 0;
     setFacing((current) => (current === "back" ? "front" : "back"));
   };
 
@@ -130,28 +127,77 @@ export default function CameraScreen() {
         }
       }
 
-      // Take the photo
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 1,
-        exif: true,
-      });
+      // Take photo and get location
+      const [photo, location] = await Promise.all([
+        cameraRef.current.takePictureAsync({
+          quality: 0.85, // Less quality for better speed
+          exif: true,
+          skipProcessing: false, // Process for better performance
+        }),
+        locationPermission?.granted
+          ? Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            }).catch(() => null)
+          : Promise.resolve(null),
+      ]);
 
-      if (photo) {
-        // Save to gallery
-        await MediaLibrary.createAssetAsync(photo.uri);
-        Alert.alert("Success", "Photo saved to gallery!", [
-          { text: "OK", onPress: () => {} },
-        ]);
+      if (!photo || !photo.uri) {
+        throw new Error("Photo URI is missing");
       }
-    } catch (error) {
-      console.error("Error taking picture:", error);
-      Alert.alert("Error", "Failed to take or save photo. Please try again.");
+
+      // Save to gallery with GPS EXIF if location is available
+      if (location) {
+        try {
+          const { latitude, longitude } = location.coords;
+          const altitude = location.coords.altitude || 0;
+
+          const result = await savePhotoWithGPS(photo.uri, {
+            latitude,
+            longitude,
+            altitude,
+          });
+
+          if (!result.success) {
+            throw new Error(result.error || "Failed to save with GPS");
+          }
+        } catch {
+          // Fallback to standard MediaLibrary (will lose GPS on Android)
+          await MediaLibrary.createAssetAsync(photo.uri);
+
+          Alert.alert(
+            "Note",
+            "Photo saved, but GPS location may not be preserved due to a technical limitation."
+          );
+        }
+      } else {
+        await MediaLibrary.createAssetAsync(photo.uri);
+      }
+
+      const successMessage = location
+        ? Platform.OS === "android"
+          ? `Photo saved with GPS location!\n\nOpen in Photos app to see the location on the map.`
+          : `Photo saved with location!\n\nSwipe up in Photos app to view on map.`
+        : "Photo saved!\n\nEnable location permissions to tag photos with GPS coordinates.";
+
+      Alert.alert("Success", successMessage);
+    } catch (error: any) {
+      let errorMessage = "Failed to take or save photo. Please try again.";
+
+      if (error.message) {
+        errorMessage += `\n\nError: ${error.message}`;
+      }
+
+      if (error.code) {
+        errorMessage += `\nCode: ${error.code}`;
+      }
+
+      Alert.alert("Camera Error", errorMessage);
     } finally {
       setIsTakingPhoto(false);
     }
   };
 
-  // Check if permissions are not determined yet
+  // Check if permissions are still loading
   if (!cameraPermission || !mediaPermission) {
     return (
       <ThemedView style={styles.container}>
@@ -177,68 +223,69 @@ export default function CameraScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <GestureHandlerRootView style={styles.container}>
       <GestureDetector gesture={pinchGesture}>
-        <AnimatedCameraView
-          ref={cameraRef}
-          style={styles.camera}
-          facing={facing}
-          animatedProps={animatedProps}
-        >
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => router.back()}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.closeIcon}>✕</Text>
-            </TouchableOpacity>
+        <View style={styles.camera}>
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFill}
+            facing={facing}
+            zoom={currentZoom}
+          >
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => router.back()}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.closeIcon}>✕</Text>
+              </TouchableOpacity>
 
-            {/* Zoom Level Indicator */}
-            {zoomLevel > 0 && (
-              <View style={styles.zoomIndicator}>
-                <Text style={styles.zoomText}>
-                  {(1 + zoomLevel * 2).toFixed(1)}x
-                </Text>
+              {/* Zoom Level Indicator */}
+              {zoomLevel > 0 && (
+                <View style={styles.zoomIndicator}>
+                  <Text style={styles.zoomText}>
+                    {(1 + zoomLevel * 2).toFixed(1)}x
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.bottomControls}>
+                <TouchableOpacity
+                  style={styles.flipButton}
+                  onPress={toggleCameraFacing}
+                  activeOpacity={0.8}
+                >
+                  <FontAwesome6 name="arrows-rotate" size={24} color="white" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.captureButton,
+                    isTakingPhoto && styles.captureButtonDisabled,
+                  ]}
+                  onPress={takePicture}
+                  activeOpacity={0.8}
+                  disabled={isTakingPhoto}
+                >
+                  <View style={styles.captureButtonInner} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.galleryButton}
+                  onPress={openGallery}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="image" size={24} color="white" />
+                </TouchableOpacity>
               </View>
-            )}
-
-            <View style={styles.bottomControls}>
-              <TouchableOpacity
-                style={styles.flipButton}
-                onPress={toggleCameraFacing}
-                activeOpacity={0.8}
-              >
-                <FontAwesome6 name="arrows-rotate" size={24} color="white" />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.captureButton,
-                  isTakingPhoto && styles.captureButtonDisabled,
-                ]}
-                onPress={takePicture}
-                activeOpacity={0.8}
-                disabled={isTakingPhoto}
-              >
-                <View style={styles.captureButtonInner} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.galleryButton}
-                onPress={openGallery}
-                activeOpacity={0.8}
-              >
-                <Feather name="image" size={24} color="white" />
-              </TouchableOpacity>
             </View>
-          </View>
-        </AnimatedCameraView>
+          </CameraView>
+        </View>
       </GestureDetector>
-    </View>
+    </GestureHandlerRootView>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
