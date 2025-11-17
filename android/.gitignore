@@ -1,16 +1,26 @@
-# OSX
-#
+# Keep Android source code but exclude build artifacts
+
+# Build outputs (too large for git)
+build/
+app/build/
+
+# Gradle cache (regenerated automatically)
+.gradle/
+
+# C++ build artifacts (very large)
+.cxx/
+app/.cxx/
+
+# Local configuration (contains absolute paths)
+local.properties
+
+# IDE files
+.idea/
+*.iml
+
+# Temporary files
+*.hprof
 .DS_Store
 
-# Android/IntelliJ
-#
-build/
-.idea
-.gradle
-local.properties
-*.iml
-*.hprof
-.cxx/
-
-# Bundle artifacts
+# Bundle artifacts (generated files)
 *.jsbundle
