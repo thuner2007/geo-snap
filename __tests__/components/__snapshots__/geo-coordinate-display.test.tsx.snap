@@ -1,0 +1,52 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`GeoCoordinateDisplay Component - Snapshot Test should match snapshot with decimal coordinates 1`] = `
+<div
+  class="geo-coordinate-display"
+  data-testid="geo-coordinate-display"
+>
+  <div
+    class="label"
+    data-testid="coordinate-label"
+  >
+    Paris, France
+  </div>
+  <div
+    class="coordinates"
+    data-testid="coordinates-container"
+  >
+    <div
+      class="coordinate-row"
+      data-testid="latitude-row"
+    >
+      <span
+        class="coordinate-label"
+      >
+        Latitude:
+      </span>
+      <span
+        class="coordinate-value"
+        data-testid="latitude-value"
+      >
+        48.856600°
+      </span>
+    </div>
+    <div
+      class="coordinate-row"
+      data-testid="longitude-row"
+    >
+      <span
+        class="coordinate-label"
+      >
+        Longitude:
+      </span>
+      <span
+        class="coordinate-value"
+        data-testid="longitude-value"
+      >
+        2.352200°
+      </span>
+    </div>
+  </div>
+</div>
+`;
